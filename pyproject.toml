@@ -6,7 +6,11 @@ readme = "README.md"
 version = "0.1.0"
 
 [tool.poetry.dependencies]
-python = "^3.10"
+dagshub = "^0.3.12"
+dvc = "^3.43.1"
+mlflow = "^2.10.0"
+python = ">= 3.10, < 3.11"
+tensorflow = "^2.14"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24"
