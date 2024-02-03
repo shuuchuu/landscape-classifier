@@ -1,0 +1,24 @@
+[tool.poetry]
+authors = ["m09 <142691+m09@users.noreply.github.com>"]
+description = "Experiment with landscape classifying."
+name = "landscape-classifier"
+readme = "README.md"
+version = "0.1.0"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+
+[tool.poetry.group.dev.dependencies]
+black = "^24"
+flake8 = "^7"
+flake8-bugbear = "^24"
+isort = "^5"
+mypy = "^1"
+pylint = "^3"
+
+[tool.isort]
+profile = "black"
+
+[build-system]
+build-backend = "poetry.core.masonry.api"
+requires = ["poetry-core"]
