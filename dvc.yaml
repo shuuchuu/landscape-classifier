@@ -1,0 +1,14 @@
+stages:
+  train:
+    cmd: python landscape_classifier/train.py
+    deps:
+      - landscape_classifier/train.py
+      - data
+    params:
+      - data_dir
+      - image_size
+      - learning_rate
+      - output_path
+      - seed
+    outs:
+      - landscape_classifier.keras

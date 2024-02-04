@@ -1,0 +1,28 @@
+schema: '2.0'
+stages:
+  train:
+    cmd: python landscape_classifier/train.py
+    deps:
+    - path: data
+      hash: md5
+      md5: 9ff067e445d5e255e01f44179d94f803.dir
+      size: 368859597
+      nfiles: 24335
+    - path: landscape_classifier/train.py
+      hash: md5
+      md5: 5c06ce5c28fd3c2d61bdc9e71a25ba9a
+      size: 2432
+    params:
+      params.yaml:
+        data_dir: data/seg_train
+        image_size:
+        - 100
+        - 100
+        learning_rate: 0.0001
+        output_path: landscape_classifier.keras
+        seed: 42
+    outs:
+    - path: landscape_classifier.keras
+      hash: md5
+      md5: 251a01e8415210c5da6fee5fafd8c9ec
+      size: 12394648
