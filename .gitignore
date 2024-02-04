@@ -1,3 +1,4 @@
 data
 creds.env
 /landscape_classifier.keras
+__pycache__/
