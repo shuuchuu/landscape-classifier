@@ -16,15 +16,28 @@ python-multipart = "^0.0.7"
 tensorflow = ">= 2, < 2.15"
 
 [tool.poetry.group.dev.dependencies]
-black = "^24"
-flake8 = "^7"
-flake8-bugbear = "^24"
-isort = "^5"
-mypy = "^1"
-pylint = "^3"
+black = "*"
+flake8 = "*"
+flake8-bugbear = "*"
+isort = "*"
+mypy = "*"
+pylint = "*"
 
 [tool.isort]
 profile = "black"
+
+[tool.mypy]
+disallow_untyped_defs = true
+ignore_missing_imports = true
+strict_optional = true
+
+[tool.pylint."MASTER"]
+jobs = 0
+load-plugins = "pylint.extensions.docparams"
+
+[tool.pylint."MESSAGES CONTROL"]
+disable = "all"
+enable = ["missing-param-doc", "differing-param-doc", "differing-type-doc", "missing-return-doc"]
 
 [build-system]
 build-backend = "poetry.core.masonry.api"

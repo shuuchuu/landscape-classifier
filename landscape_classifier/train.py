@@ -1,4 +1,3 @@
-import dagshub
 import dvc.api
 import mlflow
 import mlflow.keras
@@ -61,20 +60,18 @@ def get_lenet(
 
 
 if __name__ == "__main__":
-    dagshub.init("landscape-classifier", "m09", mlflow=True)
     config = dvc.api.params_show(stages=["train"])
-    mlflow.start_run()
-    mlflow.log_params(config)
-    mlflow.keras.autolog()
-    train_dataset, val_dataset = get_images(
-        config["data_dir"], config["image_size"], config["seed"]
-    )
-    model = get_lenet(config["image_size"], config["learning_rate"])
-    model.fit(train_dataset, validation_data=val_dataset, epochs=3)
-    model.save(config["output_path"])
-    mlflow.keras.log_model(
-        model=model,
-        artifact_path=config["output_path"],
-        registered_model_name="lenet-landscape-classifier",
-    )
-    mlflow.end_run()
+    with mlflow.start_run():
+        mlflow.log_params(config)
+        mlflow.keras.autolog()
+        train_dataset, val_dataset = get_images(
+            config["data_dir"], config["image_size"], config["seed"]
+        )
+        model = get_lenet(config["image_size"], config["learning_rate"])
+        model.fit(train_dataset, validation_data=val_dataset, epochs=3)
+        model.save(config["output_path"])
+        mlflow.keras.log_model(
+            model=model,
+            artifact_path=config["output_path"],
+            registered_model_name="lenet-landscape-classifier",
+        )
