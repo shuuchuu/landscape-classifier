@@ -1,5 +1,4 @@
-data_dir: data/seg_train
+data_dir: dataset-landscape-main
+train_dir: dataset-landscape-main/seg_train
 image_size: [100, 100]
 learning_rate: 0.0001
-output_path: landscape_classifier.keras
-seed: 42

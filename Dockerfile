@@ -1,11 +1,27 @@
-FROM python:3.10
+FROM python:3.10 AS base
 
-WORKDIR /api
+WORKDIR /app
 
-COPY ./requirements.txt /api/requirements.txt
+FROM base AS poetry
 
-RUN pip install --no-cache-dir --upgrade -r /api/requirements.txt
+RUN pip install --no-cache-dir 'poetry == 1.8.2'
 
-COPY ./landscape_classifier/api.py api.py
+COPY poetry.lock pyproject.toml /app/
 
-CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "80"]
+RUN poetry export -o requirements.txt
+
+FROM base AS runtime
+
+COPY --from=poetry /app/requirements.txt /app/requirements.txt
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY ./pyproject.toml ./README.md /app/
+
+COPY ./params.yaml /app/
+
+COPY ./landscape_classifier /app/landscape_classifier
+
+RUN pip install .
+
+CMD ["uvicorn", "landscape_classifier.api:app", "--host", "0.0.0.0", "--port", "80"]

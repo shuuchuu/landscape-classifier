@@ -6,13 +6,14 @@ readme = "README.md"
 version = "0.1.0"
 
 [tool.poetry.dependencies]
-dagshub = "^0.3"
 dvc = "^3"
 fastapi = {extras = ["all"], version = "^0.109"}
 mlflow = "^2"
 pillow = "^10"
 python = ">= 3.10, < 3.11"
 python-multipart = "^0.0.7"
+pyyaml = "^6"
+scikit-learn = "^1"
 tensorflow = ">= 2, < 2.15"
 
 [tool.poetry.group.dev.dependencies]
@@ -22,6 +23,10 @@ flake8-bugbear = "*"
 isort = "*"
 mypy = "*"
 pylint = "*"
+types-pyyaml = "*"
+
+[tool.poetry.scripts]
+landscape-classifier = "landscape_classifier.cli:main"
 
 [tool.isort]
 profile = "black"

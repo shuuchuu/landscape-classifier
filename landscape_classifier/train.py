@@ -1,24 +1,11 @@
+from pathlib import Path
+
 import dvc.api
 import mlflow
 import mlflow.keras
 import tensorflow as tf
 
-CLASS_NAMES = ["buildings", "forest", "glacier", "mountain", "sea", "street"]
-CLASS_INDICES = {l: i for i, l in enumerate(CLASS_NAMES)}
-
-
-def get_images(
-    dir_path: str, image_size: tuple[int, int], seed: int, shuffle: bool = True
-) -> tuple[tf.data.Dataset, tf.data.Dataset]:
-    return tf.keras.utils.image_dataset_from_directory(
-        dir_path,
-        class_names=CLASS_NAMES,
-        batch_size=128,
-        image_size=image_size,
-        validation_split=0.3,
-        subset="both",
-        seed=seed,
-    )
+from landscape_classifier.data import get_images
 
 
 def get_lenet(
@@ -59,19 +46,18 @@ def get_lenet(
     return model
 
 
-if __name__ == "__main__":
+def train() -> None:
     config = dvc.api.params_show(stages=["train"])
+    mlflow.set_experiment("Landscape Classification")
     with mlflow.start_run():
         mlflow.log_params(config)
-        mlflow.keras.autolog()
-        train_dataset, val_dataset = get_images(
-            config["data_dir"], config["image_size"], config["seed"]
+        X_train, X_val, y_train, y_val = get_images(
+            Path(config["train_dir"]), config["image_size"]
         )
         model = get_lenet(config["image_size"], config["learning_rate"])
-        model.fit(train_dataset, validation_data=val_dataset, epochs=3)
-        model.save(config["output_path"])
+        model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=3)
         mlflow.keras.log_model(
             model=model,
-            artifact_path=config["output_path"],
-            registered_model_name="lenet-landscape-classifier",
+            artifact_path="keras-model",
+            registered_model_name="dev.ml.lenet-landscape-classifier",
         )

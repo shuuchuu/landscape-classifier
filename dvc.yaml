@@ -1,14 +1,15 @@
 stages:
   train:
-    cmd: python landscape_classifier/train.py
+    cmd: landscape-classifier
     deps:
       - landscape_classifier/train.py
-      - data
+      - landscape_classifier/data.py
+      - ${train_dir}
     params:
-      - data_dir
+      - train_dir
       - image_size
       - learning_rate
-      - output_path
-      - seed
+  unzip:
+    cmd: unzip main.zip
     outs:
-      - landscape_classifier.keras
+      - ${data_dir}
