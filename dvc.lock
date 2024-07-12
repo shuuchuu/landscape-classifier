@@ -1,0 +1,33 @@
+schema: '2.0'
+stages:
+  train:
+    cmd: landscape-classifier
+    deps:
+    - path: dataset-landscape-main/seg_train
+      hash: md5
+      md5: 26ead25fdb2268128d40ade86d29e228.dir
+      size: 212876095
+      nfiles: 14034
+    - path: landscape_classifier/data.py
+      hash: md5
+      md5: 0394565301928e920b072d08373a7623
+      size: 1218
+    - path: landscape_classifier/train.py
+      hash: md5
+      md5: aa6dd6025a8fc6371907abc97899060e
+      size: 1923
+    params:
+      params.yaml:
+        image_size:
+        - 100
+        - 100
+        learning_rate: 0.0001
+        train_dir: dataset-landscape-main/seg_train
+  unzip:
+    cmd: unzip main.zip
+    outs:
+    - path: dataset-landscape-main
+      hash: md5
+      md5: 238c45c55d110097cce457f3b6a8c600.dir
+      size: 368859683
+      nfiles: 24337

@@ -1,0 +1,15 @@
+stages:
+  train:
+    cmd: landscape-classifier
+    deps:
+      - landscape_classifier/train.py
+      - landscape_classifier/data.py
+      - ${train_dir}
+    params:
+      - train_dir
+      - image_size
+      - learning_rate
+  unzip:
+    cmd: unzip main.zip
+    outs:
+      - ${data_dir}

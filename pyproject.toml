@@ -1,0 +1,49 @@
+[tool.poetry]
+authors = ["m09 <142691+m09@users.noreply.github.com>"]
+description = "Experiment with landscape classifying."
+name = "landscape-classifier"
+readme = "README.md"
+version = "0.1.0"
+
+[tool.poetry.dependencies]
+dvc = "^3"
+fastapi = {extras = ["all"], version = "^0.109"}
+mlflow = "^2"
+pillow = "^10"
+python = ">= 3.10, < 3.11"
+python-multipart = "^0.0.7"
+pyyaml = "^6"
+scikit-learn = "^1"
+tensorflow = ">= 2, < 2.15"
+
+[tool.poetry.group.dev.dependencies]
+black = "*"
+flake8 = "*"
+flake8-bugbear = "*"
+isort = "*"
+mypy = "*"
+pylint = "*"
+types-pyyaml = "*"
+
+[tool.poetry.scripts]
+landscape-classifier = "landscape_classifier.cli:main"
+
+[tool.isort]
+profile = "black"
+
+[tool.mypy]
+disallow_untyped_defs = true
+ignore_missing_imports = true
+strict_optional = true
+
+[tool.pylint."MASTER"]
+jobs = 0
+load-plugins = "pylint.extensions.docparams"
+
+[tool.pylint."MESSAGES CONTROL"]
+disable = "all"
+enable = ["missing-param-doc", "differing-param-doc", "differing-type-doc", "missing-return-doc"]
+
+[build-system]
+build-backend = "poetry.core.masonry.api"
+requires = ["poetry-core"]
