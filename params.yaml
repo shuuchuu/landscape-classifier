@@ -1,0 +1,4 @@
+train_dir: train-data
+image_size: [100, 100]
+learning_rate: 0.0001
+epochs: 1
