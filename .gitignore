@@ -1,0 +1,8 @@
+.mypy_cache/
+.ruff_cache/
+.venv/
+mlruns/
+/dataset-landscape-main
+creds.env
+__pycache__/
+/main.zip
