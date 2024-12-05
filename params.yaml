@@ -2,4 +2,7 @@ data_dir: data
 train_dir: data/seg_train
 image_size: [100, 100]
 learning_rate: 0.0001
+experiment: Landscape Classification
+artifact_path: model
+model_name: dev.ml.lenet-landscape-classifier
 epochs: 1

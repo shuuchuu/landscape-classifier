@@ -1,8 +1,11 @@
 from pathlib import Path
 
 import keras
+from mlflow import set_experiment, start_run
+from mlflow.keras import log_model
 
 from .data import get_images
+from .utils import log_pickle
 
 
 def get_lenet(image_size: tuple[int, int], learning_rate: float) -> keras.Model:
@@ -42,11 +45,20 @@ def get_lenet(image_size: tuple[int, int], learning_rate: float) -> keras.Model:
 
 
 def train(
+    experiment: str,
     train_dir: str,
     image_size: tuple[int, int],
     learning_rate: float,
+    artifact_path: str,
+    model_name: str,
     epochs: int,
 ) -> None:
-    X_train, X_val, y_train, y_val = get_images(Path(train_dir), image_size)
-    model = get_lenet(image_size, learning_rate)
-    model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=epochs)
+    set_experiment(experiment)
+    with start_run():
+        log_pickle({"image_size": image_size}, "model-config")
+        X_train, X_val, y_train, y_val = get_images(Path(train_dir), image_size)
+        model = get_lenet(image_size, learning_rate)
+        model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=epochs)
+        log_model(
+            model=model, artifact_path=artifact_path, registered_model_name=model_name
+        )
