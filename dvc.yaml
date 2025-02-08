@@ -5,9 +5,14 @@ stages:
       - src/landscape_classifier/cli.py
       - src/landscape_classifier/train.py
       - src/landscape_classifier/data.py
+      - src/landscape_classifier/utils.py
       - ${train_dir}
     params:
       - train_dir
       - image_size
       - learning_rate
+      - experiment
+      - artifact_path
+      - model_name
+      - model_alias
       - epochs
