@@ -1,4 +1,8 @@
 train_dir: train-data
 image_size: [100, 100]
 learning_rate: 0.0001
-epochs: 1
+experiment: Landscape Classification
+artifact_path: model
+model_name: dev.ml.landscape-classifier
+model_alias: champion
+epochs: 3
