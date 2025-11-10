@@ -16,7 +16,7 @@ Il faudra utiliser `source creds.env` avant de lancer les commandes et le code q
 
 Utilisez le code suivant pour récupérer les données&nbsp;:
 
-    dvc import https://github.com/m09/dataset-landscape.git seg_train -o train-data
+    dvc import https://github.com/shuuchuu/dataset-landscape.git seg_train -o train-data
 
 ## Publication d'un modèle sur un registre de modèle
 
@@ -81,7 +81,7 @@ On peut alors naviguer à [l'adresse par défaut de la documentation FastAPI](ht
 
 Comment modifier l'API pour qu'elle soit plus adaptée à la mise en production par image Docker ?
 
-*Votre réponse ici.*
+_Votre réponse ici._
 
 ## Solution
 
