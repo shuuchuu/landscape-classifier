@@ -16,19 +16,17 @@ Il faudra utiliser `source creds.env` avant de lancer les commandes et le code q
 
 Utilisez le code suivant pour récupérer les données&nbsp;:
 
-    dvc import https://github.com/shuuchuu/dataset-landscape.git seg_train -o train-data
+    dvc import https://github.com/shuuchuu/datasets.git landscape/seg_train -o train-data
 
 ## Publication d'un modèle sur un registre de modèle
 
-Adaptez le fichier `train.py` pour entraîner un modèle en enregistrant les métriques avec [MLFlow Tracking](https://mlflow.org/docs/latest/tracking.html). Les pages sur [Keras](https://mlflow.org/docs/latest/python_api/mlflow.keras.html) de l'API Python MLFlow & de la [flavor Keras](https://mlflow.org/docs/latest/models.html#keras-keras) des modèles MLFlow pourront être utiles.
+Adaptez le fichier `src/landscape_classifier/train.py` pour entraîner un modèle en enregistrant les métriques avec [MLFlow Tracking](https://mlflow.org/docs/latest/tracking.html). Les pages sur [Keras](https://mlflow.org/docs/latest/python_api/mlflow.keras.html) de l'API Python MLFlow & de la [flavor Keras](https://mlflow.org/docs/latest/models.html#keras-keras) des modèles MLFlow pourront être utiles.
 
 Publiez ensuite le modèle appris dans le registre de modèles MLFlow en fin d'exécution. [Cette page](https://mlflow.org/docs/latest/models.html#keras-keras) en parle ainsi que [celle-ci](https://mlflow.org/docs/latest/model-registry.html#adding-an-mlflow-model-to-the-model-registry).
 
-Vous pourrez partir du code suivant&nbsp;:
-
 ## Création d'une API avec FastAPI
 
-Toutes les questions de cette partie sont à coder dans le fichier `landscape_classifier/api.py`.
+Toutes les questions de cette partie sont à coder dans le fichier `src/landscape_classifier/api.py`.
 
 ### Création d'une fonction de prétraitement adaptée à l'inférence
 

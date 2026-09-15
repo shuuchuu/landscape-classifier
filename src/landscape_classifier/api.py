@@ -1,19 +1,31 @@
-from typing import Final, Literal, TypedDict
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from typing import Final, Literal, TypedDict, cast
 
-from fastapi import FastAPI, UploadFile
-from mlflow import MlflowClient
-from mlflow.pyfunc import load_model
+from fastapi import FastAPI, HTTPException, UploadFile
+from mlflow.exceptions import MlflowException
+from mlflow.pyfunc import PyFuncModel, load_model
 from pydantic import BaseModel
 
 from landscape_classifier.data import LABEL_NAMES
 
-app = FastAPI()
-
-client = MlflowClient()
-
 MODEL_NAME: Final = "dev.ml.landscape-classifier"
 MODEL_ALIAS: Final = "champion"
-model = load_model(model_uri=f"models:/{MODEL_NAME}@{MODEL_ALIAS}")
+
+model: PyFuncModel | None = None
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:  # noqa: RUF029
+    global model
+    try:
+        model = load_model(model_uri=f"models:/{MODEL_NAME}@{MODEL_ALIAS}")
+    except MlflowException:
+        model = None
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 Probabilities = TypedDict("Probabilities", dict.fromkeys(LABEL_NAMES, float))  # type: ignore
@@ -26,4 +38,10 @@ class ClassificationResult(BaseModel):
 
 @app.post("/")
 async def classify_image(images: list[UploadFile]) -> ClassificationResult:
-    return model.predict([image.file.read() for image in images])
+    if model is None:
+        raise HTTPException(status_code=503, detail="Modèle non chargé")
+    # `PyFuncModel.predict` is typed to return any pyfunc-compatible output,
+    # but our own `WrappedModel` always returns a `ClassificationResult`.
+    return cast(
+        ClassificationResult, model.predict([image.file.read() for image in images])
+    )

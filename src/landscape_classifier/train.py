@@ -1,16 +1,19 @@
+import os
 from io import BytesIO
 from pathlib import Path
+from subprocess import run
 from typing import Any
 
+import yaml
 from keras import Model, Sequential, layers, optimizers
-from mlflow import MlflowClient, set_experiment, start_run
+from mlflow import MlflowClient, log_input, set_experiment, start_run
+from mlflow.data.numpy_dataset import from_numpy
 from mlflow.keras import autolog
 from mlflow.pyfunc import PythonModel, PythonModelContext, log_model
 from numpy import array, vstack
 from pydantic import BaseModel
 
 from landscape_classifier.data import LABEL_NAMES, get_images, process_image
-from landscape_classifier.utils import get_pip_requirements_from_uv
 
 
 def get_lenet(image_size: tuple[int, int], learning_rate: float) -> Model:
@@ -76,33 +79,96 @@ class WrappedModel(PythonModel):
         return ClassificationResult(predicted=predicted, probabilities=probabilities)
 
 
+def _get_git_commit() -> str | None:
+    result = run(["git", "rev-parse", "HEAD"], capture_output=True)
+    if result.returncode != 0:
+        return None
+    return result.stdout.decode("utf8").strip()
+
+
+def _get_dvc_revision(train_dir: str) -> str | None:
+    dvc_file = Path(f"{train_dir}.dvc")
+    if not dvc_file.exists():
+        return None
+    outs = yaml.safe_load(dvc_file.read_text()).get("outs") or []
+    return outs[0].get("md5") if outs else None
+
+
+def _get_input_example(train_dir: str) -> list[bytes]:
+    for subdir_path in sorted(Path(train_dir).iterdir()):
+        for image_path in sorted(subdir_path.iterdir()):
+            return [image_path.read_bytes()]
+    return []
+
+
 def train(
     experiment: str,
     train_dir: str,
     image_size: tuple[int, int],
     learning_rate: float,
-    artifact_path: str,
+    name: str,
     model_name: str,
     model_alias: str,
     epochs: int,
 ) -> None:
     set_experiment(experiment)
-    autolog(log_models=False)
+    # On journalise nous-mêmes le jeu de données d'entraînement et le modèle
+    # avec les tags de traçabilité ci-dessous, autolog ne doit donc pas
+    # journaliser ses propres copies non taguées.
+    autolog(log_models=False, log_datasets=False)
+    git_commit = _get_git_commit()
+    dvc_revision = _get_dvc_revision(train_dir)
     with start_run():
         X_train, X_val, y_train, y_val = get_images(Path(train_dir), image_size)
+        log_input(
+            from_numpy(X_train, targets=y_train, source=train_dir, name="train-data"),
+            context="training",
+            tags={"dvc.revision": dvc_revision} if dvc_revision else None,
+        )
         model = get_lenet(image_size, learning_rate)
         model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=epochs)
+        # `log_model` ci-dessous exécute `predict` sur l'exemple d'entrée pour
+        # inférer le schéma de sortie, ce qui vide `model.history` en effet de
+        # bord ; il faut donc lire la précision de validation avant de l'appeler.
+        val_accuracy = model.history.history["val_accuracy"][-1]
+        version_tags = {
+            key: value
+            for key, value in {
+                "git.commit": git_commit,
+                "dvc.revision": dvc_revision,
+            }.items()
+            if value is not None
+        }
+        # On laisse MLflow inférer automatiquement les dépendances pip via
+        # `uv export` (MLFLOW_UV_AUTO_DETECT vaut true par défaut), mais sans
+        # embarquer uv.lock/pyproject.toml comme artefacts : au moment du
+        # service, `--env-manager uv` essaierait alors `uv sync` sur notre
+        # vrai pyproject.toml, qui échoue car il déclare ce projet comme un
+        # paquet installable (readme, arborescence src) absent du dossier de
+        # restauration.
+        os.environ["MLFLOW_LOG_UV_FILES"] = "false"
         model_info = log_model(
-            artifact_path=artifact_path,
+            name=name,
             python_model=WrappedModel(model),
             code_paths=["src/landscape_classifier"],
             model_config={"image_size": image_size, "label_names": LABEL_NAMES},
+            input_example=_get_input_example(train_dir),
             registered_model_name=model_name,
-            pip_requirements=get_pip_requirements_from_uv(
-                extras=["mlflow-models-serve"]
-            ),
+            tags=version_tags,
         )
         client = MlflowClient()
         client.set_registered_model_alias(
             model_name, model_alias, model_info.registered_model_version
         )
+        client.update_model_version(
+            model_name,
+            model_info.registered_model_version,
+            description=(
+                f"LeNet entraîné sur `{train_dir}` pendant {epochs} époque(s), "
+                f"val_accuracy={val_accuracy:.4f}."
+            ),
+        )
+        for key, value in version_tags.items():
+            client.set_model_version_tag(
+                model_name, model_info.registered_model_version, key, value
+            )
