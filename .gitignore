@@ -1,6 +1,7 @@
 __pycache__/
-.mypy_cache/
+.doit.json
 .ruff_cache/
 .venv/
-mlruns/
+/mlflow.db
 creds.env
+/train-data
