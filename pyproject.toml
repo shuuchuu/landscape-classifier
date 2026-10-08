@@ -14,14 +14,14 @@ dependencies = [
   "pillow >= 11, < 12",
   "pydantic >= 2.10, < 3",
   "scikit-learn >= 1, < 2",
-  "tensorflow >= 2.16, < 3",
+  "tensorflow >= 2.20, < 3",
   "tqdm >= 4, < 5",
 ]
 description = "Experiment with landscape classifying."
 license = "Apache-2.0"
 name = "landscape-classifier"
 readme = "README.md"
-requires-python = ">= 3.12"
+requires-python = ">= 3.12, < 3.14"
 version = "0.1.0"
 
 [project.optional-dependencies]
