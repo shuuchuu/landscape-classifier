@@ -22,9 +22,7 @@ def get_images(
     images = []
     labels = []
 
-    for subdir_path in tqdm.tqdm(
-        list(dir_path.iterdir()), desc="Traitement des dossiers"
-    ):
+    for subdir_path in tqdm.tqdm(list(dir_path.iterdir()), desc="Processing folders"):
         dir_name = subdir_path.name
 
         label = LABEL_TO_INDEX.get(dir_name)
