@@ -24,5 +24,5 @@ DVC remote. Run `source creds.env` before running anything that talks to MLflow.
 
 ## Solution
 
-The [`solution` branch](https://github.com/shuuchuu/landscape-classifier/tree/solution)
+The [`solution-en` branch](https://github.com/shuuchuu/landscape-classifier/tree/solution-en)
 holds a solution to every question.
