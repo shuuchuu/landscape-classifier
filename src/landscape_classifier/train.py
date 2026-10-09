@@ -112,9 +112,9 @@ def train(
     epochs: int,
 ) -> None:
     set_experiment(experiment)
-    # On journalise nous-mêmes le jeu de données d'entraînement et le modèle
-    # avec les tags de traçabilité ci-dessous, autolog ne doit donc pas
-    # journaliser ses propres copies non taguées.
+    # We log the training dataset and the model ourselves, with the
+    # traceability tags below, so autolog must not log its own untagged
+    # copies.
     autolog(log_models=False, log_datasets=False)
     git_commit = _get_git_commit()
     dvc_revision = _get_dvc_revision(train_dir)
@@ -127,9 +127,9 @@ def train(
         )
         model = get_lenet(image_size, learning_rate)
         model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=epochs)
-        # `log_model` ci-dessous exécute `predict` sur l'exemple d'entrée pour
-        # inférer le schéma de sortie, ce qui vide `model.history` en effet de
-        # bord ; il faut donc lire la précision de validation avant de l'appeler.
+        # `log_model` below runs `predict` on the input example to infer the
+        # output schema, which empties `model.history` as a side effect: read
+        # the validation accuracy before calling it.
         val_accuracy = model.history.history["val_accuracy"][-1]
         version_tags = {
             key: value
@@ -139,13 +139,12 @@ def train(
             }.items()
             if value is not None
         }
-        # On laisse MLflow inférer automatiquement les dépendances pip via
-        # `uv export` (MLFLOW_UV_AUTO_DETECT vaut true par défaut), mais sans
-        # embarquer uv.lock/pyproject.toml comme artefacts : au moment du
-        # service, `--env-manager uv` essaierait alors `uv sync` sur notre
-        # vrai pyproject.toml, qui échoue car il déclare ce projet comme un
-        # paquet installable (readme, arborescence src) absent du dossier de
-        # restauration.
+        # Let MLflow infer the pip dependencies with `uv export`
+        # (MLFLOW_UV_AUTO_DETECT defaults to true), but without shipping
+        # uv.lock/pyproject.toml as artifacts: when serving, `--env-manager uv`
+        # would then run `uv sync` on our real pyproject.toml, which fails
+        # because it declares this project as an installable package (readme,
+        # src tree) missing from the restored directory.
         os.environ["MLFLOW_LOG_UV_FILES"] = "false"
         model_info = log_model(
             name=name,
@@ -164,7 +163,7 @@ def train(
             model_name,
             model_info.registered_model_version,
             description=(
-                f"LeNet entraîné sur `{train_dir}` pendant {epochs} époque(s), "
+                f"LeNet trained on `{train_dir}` for {epochs} epoch(s), "
                 f"val_accuracy={val_accuracy:.4f}."
             ),
         )

@@ -39,7 +39,7 @@ class ClassificationResult(BaseModel):
 @app.post("/")
 async def classify_image(images: list[UploadFile]) -> ClassificationResult:
     if model is None:
-        raise HTTPException(status_code=503, detail="Modèle non chargé")
+        raise HTTPException(status_code=503, detail="Model not loaded")
     # `PyFuncModel.predict` is typed to return any pyfunc-compatible output,
     # but our own `WrappedModel` always returns a `ClassificationResult`.
     return cast(
