@@ -9,14 +9,7 @@
   // Use 'forwardPorts' to make a list of ports inside the container available locally.
   // "forwardPorts": [],
   // Use 'postCreateCommand' to run commands after the container is created.
-  "remoteEnv": {
-    "PYENV_ROOT": "/home/vscode/.pyenv",
-    "PATH": "/home/vscode/.pyenv/bin:${containerEnv:PATH}"
-  },
-  "postCreateCommand": {
-    "uv": "uv sync --frozen --all-extras",
-    "pyenv": "curl -fsSL https://pyenv.run | bash"
-  },
+  "postCreateCommand": "uv sync --all-extras",
   // Configure tool-specific properties.
   "customizations": {
     // Configure properties specific to VS Code.
@@ -33,16 +26,14 @@
             "source.organizeImports": "explicit"
           },
           "editor.formatOnSave": true
-        },
-        "mypy.runUsingActiveInterpreter": true
+        }
       },
       "extensions": [
         "be5invis.toml",
         "charliermarsh.ruff",
-        "matangover.mypy",
+        "astral-sh.ty",
         "MS-CEINTL.vscode-language-pack-fr",
         "ms-python.python",
-        "ms-toolsai.jupyter",
         "ms-vsliveshare.vsliveshare",
         "vscode-icons-team.vscode-icons"
       ]

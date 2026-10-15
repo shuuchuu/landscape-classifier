@@ -2,60 +2,39 @@
 authors = [
   {name = "m09", email = "142691+m09@users.noreply.github.com"},
 ]
-classifiers = [
-  "License :: OSI Approved :: Apache Software License",
-]
-dependencies = [
-  "dvc >= 3, < 4",
-  "keras >= 3, < 4",
-  "mlflow >= 3, < 4",
-  "niquests >= 3, < 4",
-  "numpy >= 2, < 3",
-  "pillow >= 11, < 12",
-  "pydantic >= 2.10, < 3",
-  "scikit-learn >= 1, < 2",
-  "tensorflow >= 2.20, < 3",
-  "tqdm >= 4, < 5",
-]
+dependencies = []
 description = "Experiment with landscape classifying."
+homepage = "https://github.com/shuuchuu/landscape-classifier"
 license = "Apache-2.0"
+license-files = ["LICENSE"]
 name = "landscape-classifier"
 readme = "README.md"
-requires-python = ">= 3.12, < 3.14"
+requires-python = ">= 3.12"
 version = "0.1.0"
-
-[project.optional-dependencies]
-fastapi = [
-  "fastapi[all] >= 0.115, < 1",
-  "python-multipart >= 0.0.19, < 1",
-]
-notebook = [
-  "jupyter >= 1, < 2",
-]
 
 [dependency-groups]
 dev = [
-  "doit >= 0.37, < 1",
-  "ruff >= 0.8, < 1",
-  "ty >= 0.0.33, < 0.1",
+  "doit >= 0.37",
+  "ruff >= 0.16",
+  "ty >= 0.0.33",
 ]
-
-[project.scripts]
-landscape-classifier = "landscape_classifier.cli:train_cli"
 
 [tool.ruff]
 target-version = "py312"
 
 [tool.ruff.lint]
+ignore = [
+  "D1",
+  "incorrect-blank-line-before-class",
+  "multi-line-summary-second-line",
+  "non-empty-init-module",
+]
 preview = true
-select = ["A", "ANN", "B", "C", "DOC", "E", "EM", "F", "N", "PIE", "PTH", "RET", "RUF", "SIM", "SLF", "UP", "W"]
+select = ["A", "B", "C", "D", "DOC", "E", "EM", "F", "I", "N", "PIE", "PTH", "RET", "RUF", "SIM", "SLF", "TC", "UP", "W"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
-[tool.ruff.lint.pep8-naming]
-ignore-names = ["X", "X_*", "Y", "Y_*"]
-
 [build-system]
 build-backend = "uv_build"
-requires = ["uv_build>=0.12.14,<0.13.0"]
+requires = ["uv_build>=0.12.15,<0.13.0"]

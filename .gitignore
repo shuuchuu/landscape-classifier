@@ -2,6 +2,6 @@ __pycache__/
 .doit.json
 .ruff_cache/
 .venv/
-/mlflow.db
-creds.env
-/train-data
+.vscode/
+dist/
+*.egg-info
