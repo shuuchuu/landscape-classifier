@@ -5,3 +5,7 @@ __pycache__/
 .vscode/
 dist/
 *.egg-info
+
+/mlflow.db
+creds.env
+/train-data

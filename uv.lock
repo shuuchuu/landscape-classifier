@@ -2205,9 +2205,9 @@ provides-extras = ["fastapi", "notebook"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "doit", specifier = ">=0.37,<1" },
-    { name = "ruff", specifier = ">=0.8,<1" },
-    { name = "ty", specifier = ">=0.0.33,<0.1" },
+    { name = "doit", specifier = ">=0.37" },
+    { name = "ruff", specifier = ">=0.16" },
+    { name = "ty", specifier = ">=0.0.33" },
 ]
 
 [[package]]
