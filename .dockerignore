@@ -1,0 +1,8 @@
+.env
+*.env
+.git
+.venv
+mlflow.db
+mlruns
+test-data
+train-data
