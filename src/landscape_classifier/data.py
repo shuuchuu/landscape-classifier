@@ -1,39 +1,35 @@
-import pathlib
-import typing
+"""The images: their transformation into tensors, and their loading."""
 
-import numpy
-import tqdm
-from PIL import Image
-from sklearn.model_selection import train_test_split
+import torch
+from torch.utils.data import DataLoader
+from torchvision import datasets
+from torchvision.transforms import v2
 
-LABEL_NAMES = ["buildings", "forest", "glacier", "mountain", "sea", "street"]
-LABEL_TO_INDEX = {label: i for i, label in enumerate(LABEL_NAMES)}
+IMAGE_SIZE = (100, 100)
 
 
-def process_image(
-    file: typing.BinaryIO | str | pathlib.Path, image_size: tuple[int, int]
-) -> numpy.ndarray:
-    return numpy.array(Image.open(file).resize(image_size))[None, ...]
+def get_transform(image_size: tuple[int, int]) -> v2.Compose:
+    """The transformation of an image into the model's input.
+
+    Training and inference must transform images the same way.
+
+    Returns:
+        A transformation from a PIL image to a float tensor of shape
+        `(3, *image_size)`, its pixels scaled to [0, 1].
+    """
+    return v2.Compose(
+        [v2.ToImage(), v2.Resize(image_size), v2.ToDtype(torch.float32, scale=True)]
+    )
 
 
-def get_images(
-    dir_path: pathlib.Path, image_size: tuple[int, int]
-) -> tuple[numpy.ndarray, numpy.ndarray, numpy.ndarray, numpy.ndarray]:
-    images = []
-    labels = []
+def get_loader(
+    directory: str, image_size: tuple[int, int], shuffle: bool = False
+) -> DataLoader:
+    """Load the images of `directory`, one subdirectory per class.
 
-    for subdir_path in tqdm.tqdm(list(dir_path.iterdir()), desc="Processing folders"):
-        dir_name = subdir_path.name
-
-        label = LABEL_TO_INDEX.get(dir_name)
-
-        for image_path in tqdm.tqdm(
-            list(subdir_path.iterdir()), desc=f"Dossier {dir_name}", leave=False
-        ):
-            images.append(process_image(image_path, image_size))
-            labels.append(label)
-
-    images_array = numpy.vstack(images)
-    labels_array = numpy.array(labels)
-
-    return train_test_split(images_array, labels_array, test_size=0.3, shuffle=True)
+    Returns:
+        Batches of 64 images and their class indices, the classes being the
+        subdirectories' names in alphabetical order (`loader.dataset.classes`).
+    """
+    dataset = datasets.ImageFolder(directory, transform=get_transform(image_size))
+    return DataLoader(dataset, batch_size=64, shuffle=shuffle)

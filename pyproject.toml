@@ -4,15 +4,10 @@ authors = [
 ]
 dependencies = [
   "dvc >= 3, < 4",
-  "keras >= 3, < 4",
   "mlflow >= 3, < 4",
-  "niquests >= 3, < 4",
-  "numpy >= 2, < 3",
-  "pillow >= 11, < 12",
-  "pydantic >= 2.10, < 3",
-  "scikit-learn >= 1, < 2",
-  "tensorflow >= 2.20, < 3",
-  "tqdm >= 4, < 5",
+  "pillow >= 11",
+  "torch >= 2.6",
+  "torchvision >= 0.21",
 ]
 description = "Experiment with landscape classifying."
 homepage = "https://github.com/shuuchuu/landscape-classifier"
@@ -20,13 +15,12 @@ license = "Apache-2.0"
 license-files = ["LICENSE"]
 name = "landscape-classifier"
 readme = "README.md"
-requires-python = ">= 3.13, < 3.14"
+requires-python = ">= 3.13"
 version = "0.1.0"
 
 [project.optional-dependencies]
 fastapi = [
-  "fastapi[all] >= 0.115, < 1",
-  "python-multipart >= 0.0.19, < 1",
+  "fastapi[standard] >= 0.115, < 1",
 ]
 notebook = [
   "jupyter >= 1, < 2",
@@ -41,6 +35,18 @@ dev = [
   "ruff >= 0.17",
   "ty >= 0.0.88",
 ]
+
+# CPU wheels of PyTorch: an image or a Codespace without the GPU libraries,
+# several GB smaller. Colab keeps its own torch, which already satisfies the
+# requirements above.
+[[tool.uv.index]]
+explicit = true
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+
+[tool.uv.sources]
+torch = [{index = "pytorch-cpu"}]
+torchvision = [{index = "pytorch-cpu"}]
 
 [tool.ruff]
 target-version = "py313"

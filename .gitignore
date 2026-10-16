@@ -7,5 +7,7 @@ dist/
 *.egg-info
 
 /mlflow.db
-creds.env
+.env
+*.env
 /train-data
+/test-data

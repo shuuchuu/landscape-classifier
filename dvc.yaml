@@ -3,11 +3,13 @@ stages:
     cmd: landscape-classifier
     deps:
       - src/landscape_classifier/cli.py
-      - src/landscape_classifier/train.py
       - src/landscape_classifier/data.py
+      - src/landscape_classifier/model.py
+      - src/landscape_classifier/train.py
       - ${train_dir}
+      - ${test_dir}
     params:
       - train_dir
-      - image_size
+      - test_dir
       - learning_rate
       - epochs
