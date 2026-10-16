@@ -6,6 +6,10 @@
     "dockerfile": "Dockerfile"
   },
   // Features to add to the dev container. More info: https://containers.dev/features.
+  // Docker, to build and run the lab's image in the Codespace.
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
   // Use 'forwardPorts' to make a list of ports inside the container available locally.
   // "forwardPorts": [],
   // Use 'postCreateCommand' to run commands after the container is created.
