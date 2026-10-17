@@ -11,6 +11,8 @@ import torch
 from fastapi import Depends, FastAPI, HTTPException, Security, UploadFile
 from fastapi.security import APIKeyHeader
 from PIL import Image
+from prometheus_client import Counter, Histogram
+from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
 
 from landscape_classifier.data import IMAGE_SIZE, get_transform
@@ -27,6 +29,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
 
 app = FastAPI(lifespan=lifespan)
+Instrumentator().instrument(app).expose(app)  # GET /metrics
+CONFIDENCE = Histogram(
+    "prediction_confidence",
+    "Probability of the predicted class",
+    buckets=[0.5, 0.7, 0.9, 1.0],
+)
+LABELS = Counter("predictions", "Predictions per class", ["label"])
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
@@ -42,6 +51,11 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+def record(label: str, confidence: float) -> None:
+    CONFIDENCE.observe(confidence)
+    LABELS.labels(label=label).inc()
+
+
 class Prediction(BaseModel):
     label: str
     probabilities: dict[str, float]
@@ -55,4 +69,5 @@ def predict(file: UploadFile) -> Prediction:
         scores = models["classifier"](batch).softmax(dim=1)[0]
     probabilities = dict(zip(models["classes"], scores.tolist(), strict=True))
     label = max(probabilities, key=probabilities.__getitem__)
+    record(label, probabilities[label])
     return Prediction(label=label, probabilities=probabilities)
