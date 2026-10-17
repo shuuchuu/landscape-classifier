@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from torchvision import datasets
 from torchvision.transforms import v2
 
-IMAGE_SIZE = (100, 100)
+IMAGE_SIZE = (88, 88)
 
 
 def get_transform(image_size: tuple[int, int]) -> v2.Compose:

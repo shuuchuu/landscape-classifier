@@ -299,7 +299,7 @@ Un modèle MLflow peut avoir plusieurs *flavors*, autant de manières de le char
 <details>
 <summary>Conseils supplémentaires</summary>
 
-L'URI d'une version est `models:/<nom>/<version>`. `Image.open("forest1.jpg").convert("RGB")` ouvre l'image, `get_transform(IMAGE_SIZE)(image)` en fait un tenseur de forme `(3, 100, 100)`, et `.unsqueeze(0)` un lot d'une image : la seule taille de lot que le modèle chargé accepte, MLflow l'a figée à celle de `input_example`. Le modèle renvoie des scores, que `.softmax(dim=1)` change en probabilités. `get_model_info(uri)` donne les métadonnées (`.metadata["classes"]`) et les flavors (`.flavors`). Le `predict` du modèle `pyfunc` prend un tableau NumPy (`batch.numpy()`).
+L'URI d'une version est `models:/<nom>/<version>`. `Image.open("forest1.jpg").convert("RGB")` ouvre l'image, `get_transform(IMAGE_SIZE)(image)` en fait un tenseur de forme `(3, 88, 88)`, et `.unsqueeze(0)` un lot d'une image : la seule taille de lot que le modèle chargé accepte, MLflow l'a figée à celle de `input_example`. Le modèle renvoie des scores, que `.softmax(dim=1)` change en probabilités. `get_model_info(uri)` donne les métadonnées (`.metadata["classes"]`) et les flavors (`.flavors`). Le `predict` du modèle `pyfunc` prend un tableau NumPy (`batch.numpy()`).
 
 ```python
 import torch
