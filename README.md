@@ -299,7 +299,7 @@ Un modèle MLflow peut avoir plusieurs *flavors*, autant de manières de le char
 <details>
 <summary>Conseils supplémentaires</summary>
 
-L'URI d'une version est `models:/<nom>/<version>`. `Image.open("forest1.jpg").convert("RGB")` ouvre l'image, `get_transform(IMAGE_SIZE)(image)` en fait un tenseur de forme `(3, 88, 88)`, et `.unsqueeze(0)` un lot d'une image : la seule taille de lot que le modèle chargé accepte, MLflow l'a figée à celle de `input_example`. Le modèle renvoie des scores, que `.softmax(dim=1)` change en probabilités. `get_model_info(uri)` donne les métadonnées (`.metadata["classes"]`) et les flavors (`.flavors`). Le `predict` du modèle `pyfunc` prend un tableau NumPy (`batch.numpy()`).
+L'URI d'une version est `models:/<nom>/<version>`. `Image.open("forest1.jpg").convert("RGB")` ouvre l'image, `get_transform(IMAGE_SIZE)(image)` en fait un tenseur de forme `(3, 88, 88)`, et `.unsqueeze(0)` un lot d'une image : la seule taille de lot que le modèle chargé accepte, MLflow l'a figée à celle de `input_example`. Le modèle renvoie des scores, que `.softmax(dim=1)` change en probabilités. `get_model_info(uri)` donne les métadonnées (`.metadata["classes"]`) et les flavors (`.flavors`). Le `predict` du modèle `pyfunc` prend un tableau NumPy (`batch.numpy()`). `mlflow.pyfunc.load_model(uri, model_config={"device": "cpu"})` le charge sur le CPU, même sur une machine qui a un GPU.
 
 ```python
 import torch
@@ -346,11 +346,11 @@ with torch.inference_mode():
     probabilities = model(batch).softmax(dim=1)[0]
 print(dict(zip(info.metadata["classes"], probabilities.tolist(), strict=True)))
 
-pyfunc_model = mlflow.pyfunc.load_model(uri)
+pyfunc_model = mlflow.pyfunc.load_model(uri, model_config={"device": "cpu"})
 print(pyfunc_model.predict(batch.numpy()))
 ```
 
-Le modèle a deux flavors. `pytorch` donne le réseau PyTorch (`mlflow.pytorch.load_model`), qui prend et renvoie des tenseurs. `python_function` est l'interface commune à tous les modèles MLflow (`mlflow.pyfunc.load_model`), dont `predict` prend et renvoie des tableaux NumPy : c'est elle que `mlflow models serve` sert, sans que l'appelant ait besoin de PyTorch. Aucune des deux ne transforme l'image : le prétraitement de `get_transform` reste à faire, à l'identique de l'entraînement.
+Le modèle a deux flavors. `pytorch` donne le réseau PyTorch (`mlflow.pytorch.load_model`), qui prend et renvoie des tenseurs. `python_function` est l'interface commune à tous les modèles MLflow (`mlflow.pyfunc.load_model`), dont `predict` prend et renvoie des tableaux NumPy : c'est elle que `mlflow models serve` sert, sans que l'appelant ait besoin de PyTorch. Aucune des deux ne transforme l'image : le prétraitement de `get_transform` reste à faire, à l'identique de l'entraînement. Sur un GPU, `pyfunc` y chargerait le modèle, ce que refuse un modèle au format pt2 de MLflow 3 (`torch.export`) : il garde le device où il a été enregistré, ici le CPU, d'où `model_config={"device": "cpu"}`.
 
 </details>
 
