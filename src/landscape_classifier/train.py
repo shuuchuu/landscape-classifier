@@ -96,4 +96,6 @@ def train(train_dir: str, test_dir: str, learning_rate: float, epochs: int) -> N
             registered_model_name=MODEL_NAME,
             input_example=torch.zeros(1, 3, *IMAGE_SIZE).numpy(),
             metadata={"classes": train_loader.dataset.classes},  # ty: ignore[unresolved-attribute]
+            # PyTorch's version without its local label (+cu128 on Colab), not on PyPI
+            pip_requirements=["torch==" + torch.__version__.split("+")[0]],
         )
