@@ -32,8 +32,8 @@ landscape-classifier = "landscape_classifier.cli:train_cli"
 [dependency-groups]
 dev = [
   "doit >= 0.37",
+  "pyrefly >= 1.4",
   "ruff >= 0.17",
-  "ty >= 0.0.88",
 ]
 
 # CPU wheels of PyTorch: an image or a Codespace without the GPU libraries,
@@ -67,6 +67,12 @@ convention = "google"
 [tool.ruff.lint.pep8-naming]
 ignore-names = ["X", "X_*", "Y", "Y_*"]
 
+# Without a config, pyrefly falls back to its lenient "basic" preset. With one,
+# it stops treating the project root as an import root, so tests couldn't
+# import tests.conftest without search-path.
+[tool.pyrefly]
+search-path = ["."]
+
 [build-system]
 build-backend = "uv_build"
-requires = ["uv_build>=0.13.1,<0.14.0"]
+requires = ["uv_build>=0.13.6,<0.14.0"]

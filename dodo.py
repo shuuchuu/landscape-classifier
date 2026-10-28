@@ -11,6 +11,6 @@ def task_check():
         "actions": [
             "uv run ruff check src/landscape_classifier",
             "uv run ruff format --check src/landscape_classifier",
-            "uv run ty check src/landscape_classifier",
+            "uv run pyrefly check src/landscape_classifier",
         ],
     }
