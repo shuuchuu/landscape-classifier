@@ -25,5 +25,5 @@ class LeNet(nn.Module):
             nn.Linear(84, num_classes),
         )
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:  # ty: ignore[invalid-mutable-override]
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.classifier(self.features(x))
