@@ -30,7 +30,7 @@ Créez un fichier `creds.env` (que git ignore) avec vos identifiants DagsHub, le
 
 Les images d'entraînement vont dans `train-data/`, celles de test dans `test-data/`, un sous-dossier par classe :
 
-    wget -qO- https://github.com/shuuchuu/datasets/raw/refs/heads/main/ghsparse.sh | bash -s landscape
+    wget -q https://github.com/shuuchuu/datasets/raw/refs/heads/main/ghsparse.sh -O /tmp/ghsparse.sh && bash /tmp/ghsparse.sh landscape
     mv landscape/seg_train train-data
     mv landscape/seg_test test-data
 
@@ -52,14 +52,14 @@ Modifiez la fonction `train` de `src/landscape_classifier/train.py` pour qu'un e
 - la perte moyenne de chaque époque, `train_loss`, avec le numéro de l'époque comme pas (`step`) ;
 - l'exactitude sur les images de test, `test_accuracy`.
 
-En fin d'exécution, publiez le modèle dans le registre de modèles sous le nom `dev.ml.landscape-classifier`, avec les noms des classes dans ses métadonnées (`classes`) : l'API les relira.
+En fin d'exécution, publiez le modèle dans le registre de modèles sous le nom `dev.ml.landscape-classifier`, avec les noms des classes dans ses métadonnées (`classes`), que l'API relira, et la version de PyTorch installée comme dépendance.
 
 Modifiez le fichier dans votre éditeur. La section suivante lance l'entraînement.
 
 <details>
 <summary>Conseils supplémentaires</summary>
 
-`mlflow.set_experiment("landscape-classifier")` choisit l'expérience (et la crée au besoin), puis tout se passe dans un bloc `with mlflow.start_run():`. `mlflow.log_params` prend un dictionnaire, `mlflow.log_metric(nom, valeur, step=epoch)` une valeur. `mlflow.pytorch.log_model(model, name="model", registered_model_name=..., input_example=..., metadata=...)` enregistre le modèle comme artefact de l'exécution et en crée une nouvelle version dans le registre. MLflow exporte le graphe du modèle en l'exécutant sur `input_example`, un tableau NumPy de la forme d'un lot d'une image : `torch.zeros(1, 3, *IMAGE_SIZE).numpy()`. Les noms des classes sont `train_loader.dataset.classes`. Ajoutez `import mlflow` en tête du fichier ; le reste ne change pas.
+`mlflow.set_experiment("landscape-classifier")` choisit l'expérience (et la crée au besoin), puis tout se passe dans un bloc `with mlflow.start_run():`. `mlflow.log_params` prend un dictionnaire, `mlflow.log_metric(nom, valeur, step=epoch)` une valeur. `mlflow.pytorch.log_model(model, name="model", registered_model_name=..., input_example=..., metadata=..., pip_requirements=...)` enregistre le modèle comme artefact de l'exécution et en crée une nouvelle version dans le registre. MLflow exporte le graphe du modèle en l'exécutant sur `input_example`, un tableau NumPy de la forme d'un lot d'une image : `torch.zeros(1, 3, *IMAGE_SIZE).numpy()`. Les noms des classes sont `train_loader.dataset.classes`. `pip_requirements` prend une liste de dépendances au format de pip : `torch.__version__` donne la version de PyTorch, dont on retire le suffixe local (`+cu128` sur Colab), que PyPI ne connaît pas. Ajoutez `import mlflow` en tête du fichier ; le reste ne change pas.
 
 ```python
 def train(train_dir: str, test_dir: str, learning_rate: float, epochs: int) -> None:
@@ -83,6 +83,7 @@ def train(train_dir: str, test_dir: str, learning_rate: float, epochs: int) -> N
             registered_model_name=...,
             input_example=...,
             metadata=...,
+            pip_requirements=...,
         )
 ```
 
@@ -190,6 +191,8 @@ def train(train_dir: str, test_dir: str, learning_rate: float, epochs: int) -> N
             registered_model_name=MODEL_NAME,
             input_example=torch.zeros(1, 3, *IMAGE_SIZE).numpy(),
             metadata={"classes": train_loader.dataset.classes},  # pyrefly: ignore[missing-attribute]
+            # PyTorch's version without its local label (+cu128 on Colab), not on PyPI
+            pip_requirements=["torch==" + torch.__version__.split("+")[0]],
         )
 ```
 
@@ -197,9 +200,9 @@ def train(train_dir: str, test_dir: str, learning_rate: float, epochs: int) -> N
 
 ## Entraînement
 
-La commande `landscape-classifier` lance l'entraînement, 3 époques sur les 14 000 images (environ 7 minutes sur 2 cœurs), avec les identifiants de `creds.env` :
+La commande `landscape-classifier` lance l'entraînement, 3 époques sur les 14 000 images (environ 7 minutes sur 2 cœurs), avec les identifiants de `creds.env`. En fin d'exécution, MLflow vérifie que le modèle publié accepte `input_example` en le rechargeant : `MLFLOW_DEFAULT_PREDICTION_DEVICE=cpu` le recharge sur le CPU, où il a été entraîné, même sur une machine qui a un GPU :
 
-    uv run --env-file creds.env landscape-classifier
+    MLFLOW_DEFAULT_PREDICTION_DEVICE=cpu uv run --env-file creds.env landscape-classifier
 
 Ouvrez ensuite l'interface de MLflow, <https://dagshub.com/m09/landscape-classifier.mlflow> : l'expérience `landscape-classifier` montre votre exécution, ses paramètres et la courbe de `train_loss`, et la page *Models* la nouvelle version de `dev.ml.landscape-classifier`.
 
