@@ -189,7 +189,7 @@ def train(train_dir: str, test_dir: str, learning_rate: float, epochs: int) -> N
             name="model",
             registered_model_name=MODEL_NAME,
             input_example=torch.zeros(1, 3, *IMAGE_SIZE).numpy(),
-            metadata={"classes": train_loader.dataset.classes},  # ty: ignore[unresolved-attribute]
+            metadata={"classes": train_loader.dataset.classes},  # pyrefly: ignore[missing-attribute]
         )
 ```
 
