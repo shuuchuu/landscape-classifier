@@ -4,5 +4,5 @@
 .venv
 mlflow.db
 mlruns
-test-images
-entrainement-images
+test-data
+train-data

@@ -1,4 +1,4 @@
-# Crédits des images
+# Image Credits
 
-- foret1.jpg : Oliver Herold, travail personnel, CC BY 3.0, [source](https://commons.wikimedia.org/w/index.php?curid=2554341)
-- foret2.jpg : Karduelis, travail personnel, domaine public, [source](https://commons.wikimedia.org/w/index.php?curid=3971959)
+- forest1.jpg: by Oliver Herold - Own work, CC BY 3.0, [source](https://commons.wikimedia.org/w/index.php?curid=2554341)
+- forest2.jpg: by Karduelis - Own work, Public Domain, [source](https://commons.wikimedia.org/w/index.php?curid=3971959)

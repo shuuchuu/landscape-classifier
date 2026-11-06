@@ -9,7 +9,7 @@ dependencies = [
   "torch >= 2.6",
   "torchvision >= 0.21",
 ]
-description = "Expériences de classification de paysages."
+description = "Experiment with landscape classifying."
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 name = "landscape-classifier"
@@ -27,7 +27,7 @@ notebook = [
 ]
 
 [project.scripts]
-classifieur-paysages = "classifieur_paysages.cli:entraine_cli"
+landscape-classifier = "landscape_classifier.cli:train_cli"
 
 [project.urls]
 Homepage = "https://github.com/shuuchuu/landscape-classifier"
@@ -51,9 +51,6 @@ url = "https://download.pytorch.org/whl/cpu"
 [tool.uv.sources]
 torch = [{index = "pytorch-cpu"}]
 torchvision = [{index = "pytorch-cpu"}]
-
-[tool.uv.build-backend]
-module-name = "classifieur_paysages"
 
 [tool.ruff.lint]
 ignore = [
