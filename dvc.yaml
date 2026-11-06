@@ -1,15 +1,15 @@
 stages:
-  train:
-    cmd: landscape-classifier
+  entrainement:
+    cmd: classifieur-paysages
     deps:
-      - src/landscape_classifier/cli.py
-      - src/landscape_classifier/data.py
-      - src/landscape_classifier/model.py
-      - src/landscape_classifier/train.py
-      - ${train_dir}
-      - ${test_dir}
+      - src/classifieur_paysages/cli.py
+      - src/classifieur_paysages/donnees.py
+      - src/classifieur_paysages/entrainement.py
+      - src/classifieur_paysages/modele.py
+      - ${dossier_ent}
+      - ${dossier_test}
     params:
-      - train_dir
-      - test_dir
-      - learning_rate
-      - epochs
+      - dossier_ent
+      - dossier_test
+      - taux_apprentissage
+      - nb_epoques

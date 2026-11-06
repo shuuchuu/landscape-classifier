@@ -1,4 +1,4 @@
-train_dir: train-data
-test_dir: test-data
-learning_rate: 0.001
-epochs: 3
+dossier_ent: entrainement-images
+dossier_test: test-images
+taux_apprentissage: 0.001
+nb_epoques: 3

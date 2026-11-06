@@ -9,8 +9,8 @@ DOIT_CONFIG = {
 def task_check():
     return {
         "actions": [
-            "uv run ruff check src/landscape_classifier",
-            "uv run ruff format --check src/landscape_classifier",
-            "uv run pyrefly check src/landscape_classifier",
+            "uv run ruff check src/classifieur_paysages",
+            "uv run ruff format --check src/classifieur_paysages",
+            "uv run pyrefly check src/classifieur_paysages",
         ],
     }
