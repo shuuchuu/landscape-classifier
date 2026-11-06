@@ -1,94 +1,85 @@
-# Classifieur de paysages : registre de modèles MLflow et déploiement
+# Landscape classifier: MLflow model registry & deployment
 
-*[English version](https://github.com/shuuchuu/landscape-classifier/tree/main-en)*
+*[Version française](https://github.com/shuuchuu/landscape-classifier)*
 
-Ce TP suit un modèle de bout en bout : un petit réseau convolutif (LeNet, en PyTorch) qui classe des photos de paysages en 6 classes (bâtiments, forêt, glacier, montagne, mer, rue), dont on suit l'entraînement avec MLflow, que l'on publie dans le registre de modèles de MLflow, puis que l'on sert par une API FastAPI empaquetée dans une image Docker. Il n'a pas besoin de GPU.
+This lab follows a model end to end: a small convolutional network (LeNet, in PyTorch) that classifies landscape pictures into 6 classes (buildings, forest, glacier, mountain, sea, street), whose training is tracked with MLflow, which is published to MLflow's model registry, then served by a FastAPI API packaged in a Docker image. It needs no GPU.
 
-Ce README en est l'énoncé, pour un Codespace ou votre poste ; le [notebook du TP](https://colab.research.google.com/github/shuuchuu/labs/blob/main/deployment-mlflow-registry-deployment-hands-on-fr.ipynb) donne le même dans Colab. La [branche `solution`](https://github.com/shuuchuu/landscape-classifier/tree/solution) donne une solution. Le serveur MLflow est celui de votre propre dépôt DagsHub, que vous créez à la section « Identifiants pour le serveur MLflow » : chacun y retrouve ses exécutions et ses modèles, sans ceux des autres.
+This README is its statement, for a Codespace or your computer; the [lab's notebook](https://colab.research.google.com/github/shuuchuu/labs/blob/main/deployment-mlflow-registry-deployment-hands-on-en.ipynb) gives the same in Colab. The [`solution-en` branch](https://github.com/shuuchuu/landscape-classifier/tree/solution-en) gives a solution. The MLflow server is that of the [m09/landscape-classifier](https://dagshub.com/m09/landscape-classifier) DagsHub repository.
 
-## Mise en place de l'environnement
+## Setting up the environment
 
-Ouvrez un Codespace du dépôt (<https://codespaces.new/shuuchuu/landscape-classifier>), qui installe le projet et Docker, ou, sur votre poste, avec [uv](https://docs.astral.sh/uv/) :
+Open a Codespace of the repository on the `main-en` branch (<https://codespaces.new/shuuchuu/landscape-classifier/tree/main-en>), which installs the project and Docker, or, on your computer, with [uv](https://docs.astral.sh/uv/):
 
-    git clone https://github.com/shuuchuu/landscape-classifier.git
+    git clone -b main-en https://github.com/shuuchuu/landscape-classifier.git
     cd landscape-classifier
     uv sync --all-extras
 
-Les commandes qui suivent se lancent à la racine du dépôt.
+The commands below run from the repository's root.
 
-### Identifiants pour le serveur MLflow
+### Credentials for the MLflow server
 
-Chaque stagiaire suit ses modèles dans son propre serveur MLflow, celui d'un dépôt DagsHub à son nom :
+Create a `creds.env` file (which git ignores) with your DagsHub credentials, the password being a secret token, created in your DagsHub account's settings, *Tokens*, not your DagsHub password:
 
-1. Sur [DagsHub](https://dagshub.com), créez un compte gratuit, puis un dépôt vide nommé `landscape-classifier` (*New repository*). Son serveur MLflow a pour adresse `https://dagshub.com/<votre nom d'utilisateur>/landscape-classifier.mlflow`.
-2. Dans les paramètres de votre compte DagsHub, *Tokens*, créez un jeton : c'est lui, et non votre mot de passe, que demande MLflow.
+    MLFLOW_TRACKING_URI=https://dagshub.com/m09/landscape-classifier.mlflow
+    MLFLOW_TRACKING_USERNAME=your-username
+    MLFLOW_TRACKING_PASSWORD=your-token
 
-Créez ensuite un fichier `identifiants.env` (que git ignore) avec l'adresse de votre serveur, votre nom d'utilisateur DagsHub et ce jeton :
+`uv run --env-file creds.env <command>` and `docker run --env-file creds.env` pass them to the programs that talk to MLflow.
 
-    MLFLOW_TRACKING_URI=https://dagshub.com/<votre nom d'utilisateur>/landscape-classifier.mlflow
-    MLFLOW_TRACKING_USERNAME=<votre nom d'utilisateur>
-    MLFLOW_TRACKING_PASSWORD=<votre jeton>
+### Getting the data
 
-`uv run --env-file identifiants.env <commande>` et `docker run --env-file identifiants.env` les passent aux programmes qui parlent à MLflow.
-
-### Récupération des données
-
-Les images d'entraînement vont dans `entrainement-images/`, celles de test dans `test-images/`, un sous-dossier par classe :
+The training images go to `train-data/`, the test images to `test-data/`, one subdirectory per class:
 
     wget -q https://github.com/shuuchuu/datasets/raw/refs/heads/main/ghsparse.sh -O /tmp/ghsparse.sh && bash /tmp/ghsparse.sh landscape
-    mv landscape/seg_train entrainement-images
-    mv landscape/seg_test test-images
+    mv landscape/seg_train train-data
+    mv landscape/seg_test test-data
 
-## Le projet
+## The project
 
-Le paquet `src/classifieur_paysages/` a trois modules :
+The `src/landscape_classifier/` package has three modules:
 
-- `donnees.py` : la transformation d'une image en tenseur (`cree_transformation`) et le chargement des images d'un dossier par lots (`cree_chargeur`) ;
-- `modele.py` : le réseau `LeNet` ;
-- `entrainement.py` : une époque d'entraînement (`entraine_epoque`), l'exactitude d'un modèle (`evalue`), et la fonction `entraine`, qui entraîne un modèle puis l'évalue.
+- `data.py`: the transformation of an image into a tensor (`get_transform`) and the loading of a directory's images in batches (`get_loader`);
+- `model.py`: the `LeNet` network;
+- `train.py`: one training epoch (`train_epoch`), a model's accuracy (`evaluate`), and the `train` function, which trains a model then evaluates it.
 
-La commande `classifieur-paysages` appelle `entraine` avec les paramètres de `params.yaml`, que lit DVC (l'étape `entrainement` de `dvc.yaml`). Lisez `entrainement.py`.
+The `landscape-classifier` command calls `train` with the parameters of `params.yaml`, which DVC reads (the `train` stage of `dvc.yaml`). Read `train.py`.
 
-## Suivi de l'entraînement et publication du modèle
+## Tracking the training and publishing the model
 
-Modifiez la fonction `entraine` de `src/classifieur_paysages/entrainement.py` pour qu'un entraînement soit une exécution (*run*) MLflow de l'expérience `classifieur-paysages`, qui journalise :
+Change the `train` function of `src/landscape_classifier/train.py` so that a training is an MLflow run of the `landscape-classifier` experiment, which logs:
 
-- les hyperparamètres `taux_apprentissage` et `nb_epoques` ;
-- la perte moyenne de chaque époque, `perte_entrainement`, avec le numéro de l'époque comme pas (`step`) ;
-- l'exactitude sur les images de test, `exactitude_test`.
+- the `learning_rate` and `epochs` hyperparameters;
+- the mean loss of each epoch, `train_loss`, with the epoch's number as its `step`;
+- the accuracy on the test images, `test_accuracy`.
 
-En fin d'exécution, publiez le modèle dans le registre de modèles sous le nom `dev.ml.classifieur-paysages`, avec les noms des classes dans ses métadonnées (`classes`), que l'API relira, et la version de PyTorch installée comme dépendance. Une fois le modèle entraîné (section suivante), son exécution permettra-t-elle de retrouver le code et les données qui l'ont produit ?
+At the end of the run, publish the model to the model registry under the name `dev.ml.landscape-classifier`, with the class names in its metadata (`classes`), which the API will read back, and the installed PyTorch version as its dependency.
 
-Modifiez le fichier dans votre éditeur. La section suivante lance l'entraînement.
+Edit the file in your editor. The next section runs the training.
 
 <details>
-<summary>Conseils supplémentaires</summary>
+<summary>Additional hints</summary>
 
-`mlflow.set_experiment("classifieur-paysages")` choisit l'expérience (et la crée au besoin), puis tout se passe dans un bloc `with mlflow.start_run():`. `mlflow.log_params` prend un dictionnaire, `mlflow.log_metric(nom, valeur, step=epoque)` une valeur. `mlflow.pytorch.log_model(modele, name="modele", registered_model_name=..., input_example=..., metadata=..., pip_requirements=...)` journalise le modèle (un modèle `m-…`, relié à l'exécution) et en crée une nouvelle version dans le registre. MLflow exporte le graphe du modèle en l'exécutant sur `input_example`, un tableau NumPy de la forme d'un lot d'une image : `torch.zeros(1, 3, *TAILLE_IMAGE).numpy()`. Les noms des classes sont `chargeur_ent.dataset.classes`. `pip_requirements` donne au modèle une liste courte de dépendances, indépendante du projet, au format de pip : `torch.__version__` donne la version de PyTorch, dont on retire le suffixe local (`+cu128` sur Colab), que PyPI ne connaît pas. Ajoutez `import mlflow` en tête du fichier ; le reste ne change pas.
-
-Quant à la question : non. L'exécution ne note pas le *commit* du code : MLflow ne pose l'étiquette `mlflow.source.git.commit` que pour un script lancé depuis un dépôt git, pas pour la commande `classifieur-paysages`, installée hors du dépôt, et le code que modifient les exercices n'est commité nulle part. Elle ne note pas non plus la version des données. Pour les retrouver, commitez avant d'entraîner et posez deux étiquettes dans `entraine` : `mlflow.set_tag` du *commit*, la sortie de `git rev-parse HEAD`, et de l'empreinte des dossiers d'images, que `dvc repro` note dans `dvc.lock`.
+`mlflow.set_experiment("landscape-classifier")` picks the experiment (and creates it if needed), then everything happens in a `with mlflow.start_run():` block. `mlflow.log_params` takes a dictionary, `mlflow.log_metric(name, value, step=epoch)` one value. `mlflow.pytorch.log_model(model, name="model", registered_model_name=..., input_example=..., metadata=..., pip_requirements=...)` logs the model as an artifact of the run and creates a new version of it in the registry. MLflow exports the model's graph by running it on `input_example`, a NumPy array shaped like a batch of one image: `torch.zeros(1, 3, *IMAGE_SIZE).numpy()`. The class names are `train_loader.dataset.classes`. `pip_requirements` takes a list of dependencies in pip's format: `torch.__version__` gives PyTorch's version: remove its local label (`+cu128` on Colab), which PyPI doesn't know. Add `import mlflow` at the top of the file; the rest doesn't change.
 
 ```python
-def entraine(
-    dossier_ent: str, dossier_test: str, taux_apprentissage: float, nb_epoques: int
-) -> None:
-    chargeur_ent = cree_chargeur(dossier_ent, TAILLE_IMAGE, melange=True)
-    chargeur_test = cree_chargeur(dossier_test, TAILLE_IMAGE)
-    modele = LeNet()
-    optimiseur = torch.optim.AdamW(modele.parameters(), lr=taux_apprentissage)
+def train(train_dir: str, test_dir: str, learning_rate: float, epochs: int) -> None:
+    train_loader = get_loader(train_dir, IMAGE_SIZE, shuffle=True)
+    test_loader = get_loader(test_dir, IMAGE_SIZE)
+    model = LeNet()
+    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
-    mlflow.set_experiment("classifieur-paysages")
+    mlflow.set_experiment("landscape-classifier")
     with mlflow.start_run():
         mlflow.log_params(...)
-        for epoque in range(nb_epoques):
-            perte = entraine_epoque(modele, chargeur_ent, optimiseur)
+        for epoch in range(epochs):
+            loss = train_epoch(model, train_loader, optimizer)
             mlflow.log_metric(...)
-            print(f"Époque {epoque + 1}/{nb_epoques} : perte {perte:.3f}")
-        exactitude = evalue(modele, chargeur_test)
+            print(f"Epoch {epoch + 1}/{epochs}: train loss {loss:.3f}")
+        accuracy = evaluate(model, test_loader)
         ...
         mlflow.pytorch.log_model(
-            modele,
-            name="modele",
+            model,
+            name="model",
             registered_model_name=...,
             input_example=...,
             metadata=...,
@@ -102,144 +93,140 @@ def entraine(
 <summary>Solution</summary>
 
 ```python
-"""L'entraînement et l'évaluation, suivis avec MLflow."""
+"""Training and evaluation, tracked with MLflow."""
 
 import mlflow
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
 
-from classifieur_paysages.donnees import TAILLE_IMAGE, cree_chargeur
-from classifieur_paysages.modele import LeNet
+from landscape_classifier.data import IMAGE_SIZE, get_loader
+from landscape_classifier.model import LeNet
 
-NOM_MODELE = "dev.ml.classifieur-paysages"
-
-
-def _device(modele: nn.Module) -> torch.device:
-    return next(modele.parameters()).device
+MODEL_NAME = "dev.ml.landscape-classifier"
 
 
-def entraine_epoque(
-    modele: nn.Module, chargeur: DataLoader, optimiseur: torch.optim.Optimizer
+def _device(model: nn.Module) -> torch.device:
+    return next(model.parameters()).device
+
+
+def train_epoch(
+    model: nn.Module, loader: DataLoader, optimizer: torch.optim.Optimizer
 ) -> float:
-    """Entraîne `modele` pendant une époque.
+    """Train `model` for one epoch.
 
     Returns:
-        La perte moyenne sur l'époque.
+        The mean loss over the epoch.
     """
-    device = _device(modele)
-    critere = nn.CrossEntropyLoss()
-    modele.train()
-    total, nombre = 0.0, 0
-    for images, etiquettes in chargeur:
-        images, etiquettes = images.to(device), etiquettes.to(device)
-        optimiseur.zero_grad()
-        perte = critere(modele(images), etiquettes)
-        perte.backward()
-        optimiseur.step()
-        total += perte.item() * len(etiquettes)
-        nombre += len(etiquettes)
-    return total / nombre
+    device = _device(model)
+    loss_fn = nn.CrossEntropyLoss()
+    model.train()
+    total, count = 0.0, 0
+    for images, labels in loader:
+        images, labels = images.to(device), labels.to(device)
+        optimizer.zero_grad()
+        loss = loss_fn(model(images), labels)
+        loss.backward()
+        optimizer.step()
+        total += loss.item() * len(labels)
+        count += len(labels)
+    return total / count
 
 
-def evalue(modele: nn.Module, chargeur: DataLoader) -> float:
-    """Mesure l'exactitude de `modele` sur `chargeur`.
+def evaluate(model: nn.Module, loader: DataLoader) -> float:
+    """Measure `model`'s accuracy on `loader`.
 
     Returns:
-        La part des images dont `modele` prédit la bonne classe.
+        The share of images whose class `model` predicts right.
     """
-    device = _device(modele)
-    modele.eval()
-    corrects, nombre = 0, 0
+    device = _device(model)
+    model.eval()
+    correct, count = 0, 0
     with torch.inference_mode():
-        for images, etiquettes in chargeur:
-            predites = modele(images.to(device)).argmax(dim=1).cpu()
-            corrects += int((predites == etiquettes).sum())
-            nombre += len(etiquettes)
-    return corrects / nombre
+        for images, labels in loader:
+            predicted = model(images.to(device)).argmax(dim=1).cpu()
+            correct += int((predicted == labels).sum())
+            count += len(labels)
+    return correct / count
 
 
-def predit(modele: nn.Module, chargeur: DataLoader) -> torch.Tensor:
-    """Prédit la classe de chaque image de `chargeur`.
+def predict(model: nn.Module, loader: DataLoader) -> torch.Tensor:
+    """Predict the class of every image of `loader`.
 
     Returns:
-        Les indices des classes prédites.
+        The indices of the predicted classes.
     """
-    device = _device(modele)
-    modele.eval()
+    device = _device(model)
+    model.eval()
     with torch.inference_mode():
         return torch.cat(
-            [modele(images.to(device)).argmax(dim=1).cpu() for images, _ in chargeur]
+            [model(images.to(device)).argmax(dim=1).cpu() for images, _ in loader]
         )
 
 
-def entraine(
-    dossier_ent: str, dossier_test: str, taux_apprentissage: float, nb_epoques: int
-) -> None:
-    """Entraîne un LeNet sur `dossier_ent` et l'évalue sur `dossier_test`.
+def train(train_dir: str, test_dir: str, learning_rate: float, epochs: int) -> None:
+    """Train a LeNet on `train_dir`'s images and evaluate it on `test_dir`'s.
 
-    L'exécution est suivie dans l'expérience `classifieur-paysages` de MLflow, et le
-    modèle publié dans le registre, comme nouvelle version de `NOM_MODELE`.
+    The run is tracked in MLflow's `landscape-classifier` experiment, and the
+    model published to the registry as a new version of `MODEL_NAME`.
     """
-    chargeur_ent = cree_chargeur(dossier_ent, TAILLE_IMAGE, melange=True)
-    chargeur_test = cree_chargeur(dossier_test, TAILLE_IMAGE)
-    modele = LeNet()
-    optimiseur = torch.optim.AdamW(modele.parameters(), lr=taux_apprentissage)
+    train_loader = get_loader(train_dir, IMAGE_SIZE, shuffle=True)
+    test_loader = get_loader(test_dir, IMAGE_SIZE)
+    model = LeNet()
+    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
-    mlflow.set_experiment("classifieur-paysages")
+    mlflow.set_experiment("landscape-classifier")
     with mlflow.start_run():
-        mlflow.log_params(
-            {"taux_apprentissage": taux_apprentissage, "nb_epoques": nb_epoques}
-        )
-        for epoque in range(nb_epoques):
-            perte = entraine_epoque(modele, chargeur_ent, optimiseur)
-            mlflow.log_metric("perte_entrainement", perte, step=epoque)
-            print(f"Époque {epoque + 1}/{nb_epoques} : perte {perte:.3f}")
-        exactitude = evalue(modele, chargeur_test)
-        mlflow.log_metric("exactitude_test", exactitude)
-        print(f"Exactitude sur le test : {exactitude:.3f}")
+        mlflow.log_params({"learning_rate": learning_rate, "epochs": epochs})
+        for epoch in range(epochs):
+            loss = train_epoch(model, train_loader, optimizer)
+            mlflow.log_metric("train_loss", loss, step=epoch)
+            print(f"Epoch {epoch + 1}/{epochs}: train loss {loss:.3f}")
+        accuracy = evaluate(model, test_loader)
+        mlflow.log_metric("test_accuracy", accuracy)
+        print(f"Test accuracy: {accuracy:.3f}")
         mlflow.pytorch.log_model(
-            modele,
-            name="modele",
-            registered_model_name=NOM_MODELE,
-            input_example=torch.zeros(1, 3, *TAILLE_IMAGE).numpy(),
-            metadata={"classes": chargeur_ent.dataset.classes},  # pyrefly: ignore[missing-attribute]
-            # Une liste courte, indépendante du projet ; PyTorch sans son suffixe local
+            model,
+            name="model",
+            registered_model_name=MODEL_NAME,
+            input_example=torch.zeros(1, 3, *IMAGE_SIZE).numpy(),
+            metadata={"classes": train_loader.dataset.classes},  # pyrefly: ignore[missing-attribute]
+            # PyTorch's version without its local label (+cu128 on Colab), not on PyPI
             pip_requirements=["torch==" + torch.__version__.split("+")[0]],
         )
 ```
 
 </details>
 
-## Entraînement
+## Training
 
-La commande `classifieur-paysages` lance l'entraînement, 3 époques sur les 14 000 images (environ 7 minutes sur 2 cœurs), avec les identifiants de `identifiants.env`. En fin d'exécution, MLflow vérifie que le modèle publié accepte `input_example` en le rechargeant : `MLFLOW_DEFAULT_PREDICTION_DEVICE=cpu` le recharge sur le CPU, où il a été entraîné, même sur une machine qui a un GPU :
+The `landscape-classifier` command runs the training, 3 epochs over the 14,000 images (about 7 minutes on 2 cores), with the credentials of `creds.env`. At the end of the run, MLflow checks that the published model accepts `input_example` by loading it again: `MLFLOW_DEFAULT_PREDICTION_DEVICE=cpu` loads it on the CPU, where it was trained, even on a machine with a GPU:
 
-    MLFLOW_DEFAULT_PREDICTION_DEVICE=cpu uv run --env-file identifiants.env classifieur-paysages
+    MLFLOW_DEFAULT_PREDICTION_DEVICE=cpu uv run --env-file creds.env landscape-classifier
 
-Ouvrez ensuite l'interface de MLflow, à l'adresse de votre serveur (`https://dagshub.com/<votre nom d'utilisateur>/landscape-classifier.mlflow`) : l'expérience `classifieur-paysages` montre votre exécution, ses paramètres et la courbe de `perte_entrainement`, et la page *Models* la nouvelle version de `dev.ml.classifieur-paysages`.
+Then open MLflow's interface, <https://dagshub.com/m09/landscape-classifier.mlflow>: the `landscape-classifier` experiment shows your run, its parameters and the `train_loss` curve, and the *Models* page the new version of `dev.ml.landscape-classifier`.
 
-## Utilisation du registre de modèles MLflow
+## Using the MLflow model registry
 
-Avec l'API Python de MLflow, effectuez les tâches suivantes sur le registre de modèles, dans un script `registre.py` que vous complétez à chaque question et lancez avec `uv run --env-file identifiants.env python registre.py` (ou dans un notebook, avec l'environnement `.venv` du projet).
+With MLflow's Python API, carry out the following tasks on the model registry, in a `registry.py` script that you extend at each question and run with `uv run --env-file creds.env python registry.py` (or in a notebook, with the project's `.venv` environment).
 
-### Création d'un client MLflow
+### Creating an MLflow client
 
-Créez un client MLflow (`MlflowClient`) et affichez son adresse de suivi (*tracking URI*), pour vérifier qu'elle vient bien de la variable d'environnement `MLFLOW_TRACKING_URI`.
+Create an MLflow client (`MlflowClient`) and print its tracking URI, to check that it comes from the `MLFLOW_TRACKING_URI` environment variable.
 
-**Documentation utile**
+**Useful documentation**
 
 - https://mlflow.org/docs/latest/api_reference/python_api/mlflow.client.html#mlflow.client.MlflowClient.tracking_uri
 
 <details>
-<summary>Conseils supplémentaires</summary>
+<summary>Additional hints</summary>
 
-`mlflow.MlflowClient()` lit l'adresse du serveur dans `MLFLOW_TRACKING_URI`, et l'attribut `tracking_uri` du client la donne. Gardez le nom du modèle dans une constante : les questions suivantes s'en servent.
+`mlflow.MlflowClient()` reads the server's address from `MLFLOW_TRACKING_URI`, and the client's `tracking_uri` attribute gives it. Keep the model's name in a constant: the next questions use it.
 
 ```python
 import mlflow
 
-NOM_MODELE = "dev.ml.classifieur-paysages"
+MODEL_NAME = "dev.ml.landscape-classifier"
 
 client = ...
 client.tracking_uri
@@ -253,7 +240,7 @@ client.tracking_uri
 ```python
 import mlflow
 
-NOM_MODELE = "dev.ml.classifieur-paysages"
+MODEL_NAME = "dev.ml.landscape-classifier"
 
 client = mlflow.MlflowClient()
 print(client.tracking_uri)
@@ -261,27 +248,27 @@ print(client.tracking_uri)
 
 </details>
 
-### Recherche de modèles
+### Searching models
 
-Affichez tous les modèles du registre et, pour chacun, le numéro de sa version la plus récente. Écrivez pour cela une fonction `derniere_version(nom)`, que les questions suivantes réutilisent.
+Print every model of the registry and, for each one, the number of its most recent version. Write a `latest_version(name)` function for it, which the next questions reuse.
 
-**Documentation utile**
+**Useful documentation**
 
 - https://mlflow.org/docs/latest/api_reference/python_api/mlflow.client.html#mlflow.client.MlflowClient.search_registered_models
 
 <details>
-<summary>Conseils supplémentaires</summary>
+<summary>Additional hints</summary>
 
-`client.search_registered_models()` renvoie les modèles enregistrés (attribut `name`), `client.search_model_versions(f"name = '{nom}'")` les versions d'un modèle, dont l'attribut `version` est une chaîne par un serveur, un entier en local : comparez les versions comme des entiers.
+`client.search_registered_models()` returns the registered models (`name` attribute), `client.search_model_versions(f"name = '{name}'")` a model's versions, whose `version` attribute is a string: compare the versions as integers.
 
 ```python
-def derniere_version(nom: str) -> str:
+def latest_version(name: str) -> str:
     versions = client.search_model_versions(...)
     return str(max(...))
 
 
-for modele_enregistre in client.search_registered_models():
-    print(modele_enregistre.name, ...)
+for registered_model in client.search_registered_models():
+    print(registered_model.name, ...)
 ```
 
 </details>
@@ -290,53 +277,53 @@ for modele_enregistre in client.search_registered_models():
 <summary>Solution</summary>
 
 ```python
-def derniere_version(nom: str) -> str:
-    versions = client.search_model_versions(f"name = '{nom}'")
+def latest_version(name: str) -> str:
+    versions = client.search_model_versions(f"name = '{name}'")
     return str(max(int(v.version) for v in versions))
 
 
-for modele_enregistre in client.search_registered_models():
-    print(modele_enregistre.name, derniere_version(modele_enregistre.name))
+for registered_model in client.search_registered_models():
+    print(registered_model.name, latest_version(registered_model.name))
 ```
 
 </details>
 
-### Récupération d'un modèle depuis le registre
+### Loading a model from the registry
 
-Chargez la dernière version de `dev.ml.classifieur-paysages` avec `mlflow.pytorch.load_model`, puis prédisez la classe de l'image `foret1.jpg` : ouvrez-la avec Pillow, transformez-la avec la fonction `cree_transformation` de `classifieur_paysages.donnees`, celle de l'entraînement, et lisez les noms des classes dans les métadonnées du modèle (`mlflow.models.get_model_info`).
+Load the latest version of `dev.ml.landscape-classifier` with `mlflow.pytorch.load_model`, then predict the class of the `forest1.jpg` image: open it with Pillow, transform it with the `get_transform` function of `landscape_classifier.data`, the training's own, and read the class names from the model's metadata (`mlflow.models.get_model_info`).
 
-Un modèle MLflow peut avoir plusieurs *flavors*, autant de manières de le charger : affichez celles du vôtre, et chargez-le aussi avec `mlflow.pyfunc.load_model`. Qu'est-ce que cela change ?
+An MLflow model can have several *flavors*, as many ways to load it: print those of yours, and load it with `mlflow.pyfunc.load_model` too. What does that change?
 
-**Documentation utile**
+**Useful documentation**
 
 - https://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.open
 - https://mlflow.org/docs/latest/api_reference/python_api/mlflow.pyfunc.html#mlflow.pyfunc.load_model
 
 <details>
-<summary>Conseils supplémentaires</summary>
+<summary>Additional hints</summary>
 
-L'URI d'une version est `models:/<nom>/<version>`. `Image.open("foret1.jpg").convert("RGB")` ouvre l'image, `cree_transformation(TAILLE_IMAGE)(image)` en fait un tenseur de forme `(3, 88, 88)`, et `.unsqueeze(0)` un lot d'une image : la seule taille de lot que le modèle chargé accepte, MLflow l'a figée à celle de `input_example`. Le modèle renvoie des scores, que `.softmax(dim=1)` change en probabilités. `get_model_info(uri)` donne les métadonnées (`.metadata["classes"]`) et les flavors (`.flavors`). Le `predict` du modèle `pyfunc` prend un tableau NumPy (`lot.numpy()`). `mlflow.pyfunc.load_model(uri, model_config={"device": "cpu"})` le charge sur le CPU, même sur une machine qui a un GPU.
+A version's URI is `models:/<name>/<version>`. `Image.open("forest1.jpg").convert("RGB")` opens the image, `get_transform(IMAGE_SIZE)(image)` turns it into a tensor of shape `(3, 88, 88)`, and `.unsqueeze(0)` into a batch of one image: the only batch size the loaded model accepts, MLflow fixed it to that of `input_example`. The model returns scores, which `.softmax(dim=1)` turns into probabilities. `get_model_info(uri)` gives the metadata (`.metadata["classes"]`) and the flavors (`.flavors`). The `pyfunc` model's `predict` takes a NumPy array (`batch.numpy()`). `mlflow.pyfunc.load_model(uri, model_config={"device": "cpu"})` loads it on the CPU, even on a machine with a GPU.
 
 ```python
 import torch
 from PIL import Image
 
-from classifieur_paysages.donnees import TAILLE_IMAGE, cree_transformation
+from landscape_classifier.data import IMAGE_SIZE, get_transform
 
-version = derniere_version(NOM_MODELE)
-uri = f"models:/{NOM_MODELE}/{version}"
-modele = mlflow.pytorch.load_model(uri)
+version = latest_version(MODEL_NAME)
+uri = f"models:/{MODEL_NAME}/{version}"
+model = mlflow.pytorch.load_model(uri)
 info = ...
 print(list(info.flavors))
 
-image = Image.open("foret1.jpg").convert("RGB")
-lot = ...
+image = Image.open("forest1.jpg").convert("RGB")
+batch = ...
 with torch.inference_mode():
-    probabilites = ...
-print(dict(zip(info.metadata["classes"], probabilites.tolist(), strict=True)))
+    probabilities = ...
+print(dict(zip(info.metadata["classes"], probabilities.tolist(), strict=True)))
 
-modele_pyfunc = ...
-print(modele_pyfunc.predict(...))
+pyfunc_model = ...
+print(pyfunc_model.predict(...))
 ```
 
 </details>
@@ -348,51 +335,51 @@ print(modele_pyfunc.predict(...))
 import torch
 from PIL import Image
 
-from classifieur_paysages.donnees import TAILLE_IMAGE, cree_transformation
+from landscape_classifier.data import IMAGE_SIZE, get_transform
 
-version = derniere_version(NOM_MODELE)
-uri = f"models:/{NOM_MODELE}/{version}"
-modele = mlflow.pytorch.load_model(uri)
+version = latest_version(MODEL_NAME)
+uri = f"models:/{MODEL_NAME}/{version}"
+model = mlflow.pytorch.load_model(uri)
 info = mlflow.models.get_model_info(uri)
 print(list(info.flavors))
 
-image = Image.open("foret1.jpg").convert("RGB")
-lot = cree_transformation(TAILLE_IMAGE)(image).unsqueeze(0)
+image = Image.open("forest1.jpg").convert("RGB")
+batch = get_transform(IMAGE_SIZE)(image).unsqueeze(0)
 with torch.inference_mode():
-    probabilites = modele(lot).softmax(dim=1)[0]
-print(dict(zip(info.metadata["classes"], probabilites.tolist(), strict=True)))
+    probabilities = model(batch).softmax(dim=1)[0]
+print(dict(zip(info.metadata["classes"], probabilities.tolist(), strict=True)))
 
-modele_pyfunc = mlflow.pyfunc.load_model(uri, model_config={"device": "cpu"})
-print(modele_pyfunc.predict(lot.numpy()))
+pyfunc_model = mlflow.pyfunc.load_model(uri, model_config={"device": "cpu"})
+print(pyfunc_model.predict(batch.numpy()))
 ```
 
-Le modèle a deux flavors. `pytorch` donne le réseau PyTorch (`mlflow.pytorch.load_model`), qui prend et renvoie des tenseurs. `python_function` est l'interface commune à tous les modèles MLflow (`mlflow.pyfunc.load_model`), dont `predict` prend et renvoie des tableaux NumPy : c'est elle que `mlflow models serve` sert, sans que l'appelant ait besoin de PyTorch. Aucune des deux ne transforme l'image : le prétraitement de `cree_transformation` reste à faire, à l'identique de l'entraînement. Sur un GPU, `pyfunc` y chargerait le modèle, ce que refuse un modèle au format pt2 de MLflow 3 (`torch.export`) : il garde le device où il a été enregistré, ici le CPU, d'où `model_config={"device": "cpu"}`.
+The model has two flavors. `pytorch` gives the PyTorch network (`mlflow.pytorch.load_model`), which takes and returns tensors. `python_function` is the interface common to every MLflow model (`mlflow.pyfunc.load_model`), whose `predict` takes and returns NumPy arrays: it is what `mlflow models serve` serves, without the caller needing PyTorch. Neither transforms the image: `get_transform`'s preprocessing is still to do, exactly as in training. On a GPU, `pyfunc` would load the model there, which a model in MLflow 3's pt2 format (`torch.export`) refuses: it keeps the device it was saved on, here the CPU, hence `model_config={"device": "cpu"}`.
 
 </details>
 
-### Ajout d'alias et d'étiquettes
+### Adding aliases and tags
 
-Les alias et les étiquettes (*tags*) organisent les modèles du registre. Un alias désigne une version précise, et se déplace d'une version à l'autre ; une étiquette se pose sur un modèle ou sur l'une de ses versions.
+Aliases and tags organize the registry's models. An alias names one precise version, and moves from one version to another; a tag goes on a model or on one of its versions.
 
-Donnez l'alias `champion` à la dernière version de votre modèle, posez l'étiquette `domaine` de valeur `vision` sur le modèle et l'étiquette `taille` de valeur `petit` sur sa dernière version. Chargez ensuite le modèle par son alias plutôt que par son numéro de version, et prédisez à nouveau la classe de `foret1.jpg`.
+Give the `champion` alias to your model's latest version, put the `domain` tag with value `cv` on the model and the `size` tag with value `small` on its latest version. Then load the model by its alias rather than by its version number, and predict the class of `forest1.jpg` again.
 
-**Documentation utile**
+**Useful documentation**
 
 - https://mlflow.org/docs/latest/api_reference/python_api/mlflow.client.html#mlflow.client.MlflowClient.set_registered_model_tag
 
 <details>
-<summary>Conseils supplémentaires</summary>
+<summary>Additional hints</summary>
 
-`client.set_registered_model_alias(nom, alias, version)`, `client.set_registered_model_tag(nom, clé, valeur)` et `client.set_model_version_tag(nom, version, clé, valeur)`. L'URI d'un alias est `models:/<nom>@<alias>`.
+`client.set_registered_model_alias(name, alias, version)`, `client.set_registered_model_tag(name, key, value)` and `client.set_model_version_tag(name, version, key, value)`. An alias's URI is `models:/<name>@<alias>`.
 
 ```python
-client.set_registered_model_alias(NOM_MODELE, ..., version)
-client.set_registered_model_tag(NOM_MODELE, ...)
-client.set_model_version_tag(NOM_MODELE, version, ...)
+client.set_registered_model_alias(MODEL_NAME, ..., version)
+client.set_registered_model_tag(MODEL_NAME, ...)
+client.set_model_version_tag(MODEL_NAME, version, ...)
 
-modele = mlflow.pytorch.load_model(...)
+model = mlflow.pytorch.load_model(...)
 with torch.inference_mode():
-    print(modele(lot).softmax(dim=1)[0])
+    print(model(batch).softmax(dim=1)[0])
 ```
 
 </details>
@@ -401,26 +388,26 @@ with torch.inference_mode():
 <summary>Solution</summary>
 
 ```python
-client.set_registered_model_alias(NOM_MODELE, "champion", version)
-client.set_registered_model_tag(NOM_MODELE, "domaine", "vision")
-client.set_model_version_tag(NOM_MODELE, version, "taille", "petit")
-print(client.get_model_version_by_alias(NOM_MODELE, "champion"))
+client.set_registered_model_alias(MODEL_NAME, "champion", version)
+client.set_registered_model_tag(MODEL_NAME, "domain", "cv")
+client.set_model_version_tag(MODEL_NAME, version, "size", "small")
+print(client.get_model_version_by_alias(MODEL_NAME, "champion"))
 
-modele = mlflow.pytorch.load_model(f"models:/{NOM_MODELE}@champion")
+model = mlflow.pytorch.load_model(f"models:/{MODEL_NAME}@champion")
 with torch.inference_mode():
-    print(modele(lot).softmax(dim=1)[0])
+    print(model(batch).softmax(dim=1)[0])
 ```
 
 </details>
 
-### Promotion d'un modèle
+### Promoting a model
 
-Pour promouvoir un modèle d'un environnement au suivant, la méthode recommandée est de copier la version voulue vers le modèle de l'environnement suivant, qui a son propre nom. Copiez la version `champion` de votre modèle vers le modèle `staging.ml.classifieur-paysages`, le nom où le préfixe `dev.` devient `staging.`.
+To promote a model from one environment to the next, the recommended way is to copy the wanted version to the next environment's model, which has its own name. Copy your model's `champion` version to the `staging.ml.landscape-classifier` model, the name where the `dev.` prefix becomes `staging.`.
 
 <details>
-<summary>Conseils supplémentaires</summary>
+<summary>Additional hints</summary>
 
-`client.copy_model_version(src_model_uri=..., dst_name=...)` crée le modèle de destination s'il n'existe pas encore ; la source est une URI de modèle, ici celle de l'alias.
+`client.copy_model_version(src_model_uri=..., dst_name=...)` creates the destination model if it doesn't exist yet; the source is a model URI, here the alias's.
 
 ```python
 client.copy_model_version(
@@ -436,27 +423,27 @@ client.copy_model_version(
 
 ```python
 client.copy_model_version(
-    src_model_uri=f"models:/{NOM_MODELE}@champion",
-    dst_name="staging.ml.classifieur-paysages",
+    src_model_uri=f"models:/{MODEL_NAME}@champion",
+    dst_name="staging.ml.landscape-classifier",
 )
 ```
 
 </details>
 
-## Création d'une API avec FastAPI
+## Creating an API with FastAPI
 
-Écrivez l'API d'inférence dans `src/classifieur_paysages/api.py` :
+Write the inference API in `src/landscape_classifier/api.py`:
 
-- au démarrage (`lifespan`), elle charge une fois pour toutes le modèle dont l'URI est la variable d'environnement `URI_MODELE`, `models:/dev.ml.classifieur-paysages@champion` par défaut, et les noms de ses classes ;
-- `GET /sante` répond `{"statut": "ok"}` : les sondes de Kubernetes l'appellent pour savoir si l'API est prête ;
-- `POST /prediction` reçoit une image (`UploadFile`), la transforme comme à l'entraînement, et renvoie un objet Pydantic `Prediction` : la classe la plus probable (`etiquette`) et la probabilité de chaque classe (`probabilites`, un dictionnaire).
+- at startup (`lifespan`), it loads once and for all the model whose URI is the `MODEL_URI` environment variable, `models:/dev.ml.landscape-classifier@champion` by default, and its class names;
+- `GET /health` answers `{"status": "ok"}`: Kubernetes' probes call it to know whether the API is ready;
+- `POST /predict` receives an image (`UploadFile`), transforms it as in training, and returns a Pydantic `Prediction` object: the most likely class (`label`) and each class's probability (`probabilities`, a dictionary).
 
-À quoi faut-il faire extrêmement attention dans le prétraitement ? Testez ensuite l'API (section suivante).
+What must you be extremely careful about in the preprocessing? Then test the API (next section).
 
 <details>
-<summary>Conseils supplémentaires</summary>
+<summary>Additional hints</summary>
 
-Le modèle chargé et les noms des classes vont dans un dictionnaire global (`modeles`), que `lifespan` remplit avant son `yield`. La fonction de `/prediction` est une `def`, pas une `async def` : l'inférence bloque. `Image.open(fichier.file).convert("RGB")` lit l'image envoyée, et l'inférence se fait sous `torch.inference_mode()`. Les probabilités sont des `float` Python (`.tolist()`), jamais un tenseur.
+The loaded model and the class names go in a global dictionary (`models`), which `lifespan` fills before its `yield`. The `/predict` function is a `def`, not an `async def`: inference blocks. `Image.open(file.file).convert("RGB")` reads the uploaded image, and inference runs under `torch.inference_mode()`. The probabilities are Python `float`s (`.tolist()`), never a tensor.
 
 ```python
 import os
@@ -470,43 +457,41 @@ from fastapi import FastAPI, UploadFile
 from PIL import Image
 from pydantic import BaseModel
 
-from classifieur_paysages.donnees import TAILLE_IMAGE, cree_transformation
+from landscape_classifier.data import IMAGE_SIZE, get_transform
 
-URI_MODELE = os.environ.get(
-    "URI_MODELE", "models:/dev.ml.classifieur-paysages@champion"
-)
-modeles: dict[str, Any] = {}
+MODEL_URI = os.environ.get("MODEL_URI", "models:/dev.ml.landscape-classifier@champion")
+models: dict[str, Any] = {}
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    modeles["classifieur"] = ...
-    modeles["classes"] = ...
+    models["classifier"] = ...
+    models["classes"] = ...
     yield
 
 
 app = FastAPI(lifespan=lifespan)
 
 
-@app.get("/sante")
-def sante() -> dict[str, str]:
+@app.get("/health")
+def health() -> dict[str, str]:
     return ...
 
 
 class Prediction(BaseModel):
-    etiquette: str
-    probabilites: ...
+    label: str
+    probabilities: ...
 
 
-@app.post("/prediction")
-def predit(fichier: UploadFile) -> Prediction:
-    image = Image.open(fichier.file).convert("RGB")
-    lot = ...
+@app.post("/predict")
+def predict(file: UploadFile) -> Prediction:
+    image = Image.open(file.file).convert("RGB")
+    batch = ...
     with torch.inference_mode():
         scores = ...
-    probabilites = ...
-    etiquette = ...
-    return Prediction(etiquette=etiquette, probabilites=probabilites)
+    probabilities = ...
+    label = ...
+    return Prediction(label=label, probabilities=probabilities)
 ```
 
 </details>
@@ -515,7 +500,7 @@ def predit(fichier: UploadFile) -> Prediction:
 <summary>Solution</summary>
 
 ```python
-"""L'API HTTP du classifieur : `fastapi run src/classifieur_paysages/api.py`."""
+"""The classifier's HTTP API: `fastapi run src/landscape_classifier/api.py`."""
 
 import os
 from collections.abc import AsyncGenerator
@@ -528,66 +513,64 @@ from fastapi import FastAPI, UploadFile
 from PIL import Image
 from pydantic import BaseModel
 
-from classifieur_paysages.donnees import TAILLE_IMAGE, cree_transformation
+from landscape_classifier.data import IMAGE_SIZE, get_transform
 
-URI_MODELE = os.environ.get(
-    "URI_MODELE", "models:/dev.ml.classifieur-paysages@champion"
-)
-modeles: dict[str, Any] = {}
+MODEL_URI = os.environ.get("MODEL_URI", "models:/dev.ml.landscape-classifier@champion")
+models: dict[str, Any] = {}
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    modeles["classifieur"] = mlflow.pytorch.load_model(URI_MODELE)
-    modeles["classes"] = mlflow.models.get_model_info(URI_MODELE).metadata["classes"]
+    models["classifier"] = mlflow.pytorch.load_model(MODEL_URI)
+    models["classes"] = mlflow.models.get_model_info(MODEL_URI).metadata["classes"]
     yield
 
 
 app = FastAPI(lifespan=lifespan)
 
 
-# Sondes de Kubernetes : l'API ne répond qu'une fois le modèle chargé par `lifespan`.
-@app.get("/sante")
-def sante() -> dict[str, str]:
-    return {"statut": "ok"}
+# Kubernetes' probes: the API only answers once `lifespan` has loaded the model.
+@app.get("/health")
+def health() -> dict[str, str]:
+    return {"status": "ok"}
 
 
 class Prediction(BaseModel):
-    etiquette: str
-    probabilites: dict[str, float]
+    label: str
+    probabilities: dict[str, float]
 
 
-@app.post("/prediction")
-def predit(fichier: UploadFile) -> Prediction:
-    image = Image.open(fichier.file).convert("RGB")
-    lot = cree_transformation(TAILLE_IMAGE)(image).unsqueeze(0)
+@app.post("/predict")
+def predict(file: UploadFile) -> Prediction:
+    image = Image.open(file.file).convert("RGB")
+    batch = get_transform(IMAGE_SIZE)(image).unsqueeze(0)
     with torch.inference_mode():
-        scores = modeles["classifieur"](lot).softmax(dim=1)[0]
-    probabilites = dict(zip(modeles["classes"], scores.tolist(), strict=True))
-    etiquette = max(probabilites, key=probabilites.__getitem__)
-    return Prediction(etiquette=etiquette, probabilites=probabilites)
+        scores = models["classifier"](batch).softmax(dim=1)[0]
+    probabilities = dict(zip(models["classes"], scores.tolist(), strict=True))
+    label = max(probabilities, key=probabilities.__getitem__)
+    return Prediction(label=label, probabilities=probabilities)
 ```
 
-Le prétraitement doit être exactement celui de l'entraînement : l'API importe `cree_transformation` et `TAILLE_IMAGE` de `classifieur_paysages.donnees` au lieu de les réécrire. Une différence (taille, mise à l'échelle des pixels, ordre des canaux) ne lève aucune erreur : elle dégrade les prédictions en silence.
+The preprocessing must be exactly the training's: the API imports `get_transform` and `IMAGE_SIZE` from `landscape_classifier.data` instead of rewriting them. A difference (size, pixel scaling, channel order) raises no error: it silently degrades the predictions.
 
 </details>
 
-### Test de l'API
+### Testing the API
 
-Lancez le serveur avec les identifiants de `identifiants.env`, puis appelez-le depuis un autre terminal ; sa documentation interactive, qui sert aussi de client de test, est à l'adresse <http://localhost:8000/docs> :
+Start the server with the credentials of `creds.env`, then call it from another terminal; its interactive documentation, which is also a test client, is at <http://localhost:8000/docs>:
 
-    uv run --env-file identifiants.env fastapi dev src/classifieur_paysages/api.py
-    curl http://localhost:8000/sante
-    curl -F fichier=@foret1.jpg http://localhost:8000/prediction
+    uv run --env-file creds.env fastapi dev src/landscape_classifier/api.py
+    curl http://localhost:8000/health
+    curl -F file=@forest1.jpg http://localhost:8000/predict
 
-## Protection de l'API par une clé
+## Protecting the API with a key
 
-Protégez `POST /prediction` par une clé d'API, lue dans la variable d'environnement `CLE_API` : sans elle, l'API refuse de démarrer (dans `lifespan`, avant de charger le modèle), plutôt que de rester ouverte à tous ; une requête qui n'a pas d'en-tête `X-API-Key` égal à sa valeur reçoit une erreur 401. `GET /sante` reste ouvert.
+Protect `POST /predict` with an API key: when the `API_KEY` environment variable is set, a request without an `X-API-Key` header equal to its value gets a 401 error. Without `API_KEY`, the API stays open, as in the previous section, and `GET /health` always stays open.
 
 <details>
-<summary>Conseils supplémentaires</summary>
+<summary>Additional hints</summary>
 
-`APIKeyHeader(name="X-API-Key", auto_error=False)` lit l'en-tête (`None` s'il manque). Une fonction `verifie_cle_api` qui le reçoit par `Security(entete_cle_api)` lève `HTTPException(status_code=401, detail=...)`, et `@app.post("/prediction", dependencies=[Depends(verifie_cle_api)])` l'appelle avant chaque requête. `secrets.compare_digest` compare deux suites d'octets en un temps qui ne dépend pas de leur contenu : `.encode()` des deux côtés, car sur des chaînes il n'accepte que l'ASCII, et une clé accentuée lèverait une `TypeError`, une erreur 500 au lieu d'un 401. Sans `CLE_API`, `lifespan` lève une `RuntimeError` : une variable oubliée au déploiement arrête l'API au lieu de l'ouvrir. Ajoutez à `api.py` :
+`APIKeyHeader(name="X-API-Key", auto_error=False)` reads the header (`None` when it's missing). A `check_api_key` function receiving it through `Security(api_key_header)` raises `HTTPException(status_code=401, detail=...)`, and `@app.post("/predict", dependencies=[Depends(check_api_key)])` calls it before each request. `secrets.compare_digest` compares two strings in a time that doesn't depend on their content. Add to `api.py`:
 
 ```python
 import secrets
@@ -596,27 +579,17 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Security
 from fastapi.security import APIKeyHeader
 
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+
+def check_api_key(key: Annotated[str | None, Security(api_key_header)]) -> None:
+    expected = os.environ.get("API_KEY")
     if ...:
-        msg = ...
-        raise RuntimeError(msg)
-    modeles["classifieur"] = mlflow.pytorch.load_model(URI_MODELE)
-    modeles["classes"] = mlflow.models.get_model_info(URI_MODELE).metadata["classes"]
-    yield
-
-
-entete_cle_api = APIKeyHeader(name="X-API-Key", auto_error=False)
-
-
-def verifie_cle_api(cle: Annotated[str | None, Security(entete_cle_api)]) -> None:
-    if not secrets.compare_digest(...):
         raise HTTPException(...)
 
 
-@app.post("/prediction", dependencies=[...])
-def predit(fichier: UploadFile) -> Prediction: ...
+@app.post("/predict", dependencies=[...])
+def predict(file: UploadFile) -> Prediction: ...
 ```
 
 </details>
@@ -625,7 +598,7 @@ def predit(fichier: UploadFile) -> Prediction: ...
 <summary>Solution</summary>
 
 ```python
-"""L'API HTTP du classifieur : `fastapi run src/classifieur_paysages/api.py`."""
+"""The classifier's HTTP API: `fastapi run src/landscape_classifier/api.py`."""
 
 import os
 import secrets
@@ -640,95 +613,89 @@ from fastapi.security import APIKeyHeader
 from PIL import Image
 from pydantic import BaseModel
 
-from classifieur_paysages.donnees import TAILLE_IMAGE, cree_transformation
+from landscape_classifier.data import IMAGE_SIZE, get_transform
 
-URI_MODELE = os.environ.get(
-    "URI_MODELE", "models:/dev.ml.classifieur-paysages@champion"
-)
-modeles: dict[str, Any] = {}
+MODEL_URI = os.environ.get("MODEL_URI", "models:/dev.ml.landscape-classifier@champion")
+models: dict[str, Any] = {}
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    if not os.environ.get("CLE_API"):
-        msg = "CLE_API absente : l'API refuse de démarrer"
-        raise RuntimeError(msg)
-    modeles["classifieur"] = mlflow.pytorch.load_model(URI_MODELE)
-    modeles["classes"] = mlflow.models.get_model_info(URI_MODELE).metadata["classes"]
+    models["classifier"] = mlflow.pytorch.load_model(MODEL_URI)
+    models["classes"] = mlflow.models.get_model_info(MODEL_URI).metadata["classes"]
     yield
 
 
 app = FastAPI(lifespan=lifespan)
-entete_cle_api = APIKeyHeader(name="X-API-Key", auto_error=False)
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
-def verifie_cle_api(cle: Annotated[str | None, Security(entete_cle_api)]) -> None:
-    if not secrets.compare_digest((cle or "").encode(), os.environ["CLE_API"].encode()):
-        raise HTTPException(status_code=401, detail="Clé d'API invalide")
+def check_api_key(key: Annotated[str | None, Security(api_key_header)]) -> None:
+    expected = os.environ.get("API_KEY")
+    if expected and not secrets.compare_digest(key or "", expected):
+        raise HTTPException(status_code=401, detail="Invalid API key")
 
 
-# Sondes de Kubernetes : l'API ne répond qu'une fois le modèle chargé par `lifespan`.
-@app.get("/sante")
-def sante() -> dict[str, str]:
-    return {"statut": "ok"}
+# Kubernetes' probes: the API only answers once `lifespan` has loaded the model.
+@app.get("/health")
+def health() -> dict[str, str]:
+    return {"status": "ok"}
 
 
 class Prediction(BaseModel):
-    etiquette: str
-    probabilites: dict[str, float]
+    label: str
+    probabilities: dict[str, float]
 
 
-@app.post("/prediction", dependencies=[Depends(verifie_cle_api)])
-def predit(fichier: UploadFile) -> Prediction:
-    image = Image.open(fichier.file).convert("RGB")
-    lot = cree_transformation(TAILLE_IMAGE)(image).unsqueeze(0)
+@app.post("/predict", dependencies=[Depends(check_api_key)])
+def predict(file: UploadFile) -> Prediction:
+    image = Image.open(file.file).convert("RGB")
+    batch = get_transform(IMAGE_SIZE)(image).unsqueeze(0)
     with torch.inference_mode():
-        scores = modeles["classifieur"](lot).softmax(dim=1)[0]
-    probabilites = dict(zip(modeles["classes"], scores.tolist(), strict=True))
-    etiquette = max(probabilites, key=probabilites.__getitem__)
-    return Prediction(etiquette=etiquette, probabilites=probabilites)
+        scores = models["classifier"](batch).softmax(dim=1)[0]
+    probabilities = dict(zip(models["classes"], scores.tolist(), strict=True))
+    label = max(probabilities, key=probabilities.__getitem__)
+    return Prediction(label=label, probabilities=probabilities)
 ```
 
 </details>
 
-### Test de la clé
+### Testing the key
 
-Relancez le serveur sans clé : il refuse de démarrer. Relancez-le avec une clé, puis appelez-le sans clé, et avec :
+Restart the server with a key, then call it without the key, and with it:
 
-    uv run --env-file identifiants.env fastapi dev src/classifieur_paysages/api.py
-    CLE_API=une-cle-de-test uv run --env-file identifiants.env fastapi dev src/classifieur_paysages/api.py
-    curl -F fichier=@foret1.jpg http://localhost:8000/prediction
-    curl -H "X-API-Key: une-cle-de-test" -F fichier=@foret1.jpg http://localhost:8000/prediction
+    API_KEY=a-test-key uv run --env-file creds.env fastapi dev src/landscape_classifier/api.py
+    curl -F file=@forest1.jpg http://localhost:8000/predict
+    curl -H "X-API-Key: a-test-key" -F file=@forest1.jpg http://localhost:8000/predict
 
-## Création d'une image Docker
+## Creating a Docker image
 
-Écrivez un `Dockerfile` pour l'API, qui :
+Write a `Dockerfile` for the API, which:
 
-- part de l'image `python:3.13-slim` et y copie `uv` ;
-- installe les dépendances du projet (celles de `uv.lock`, avec l'extra `fastapi`) avant d'y copier le code et le README, pour que Docker réutilise leur couche quand seul le code ou le README change ;
-- installe le projet ;
-- fait tourner le serveur sous un utilisateur qui n'est pas `root` ;
-- interdit à MLflow de charger un modèle qui exécuterait du code (`MLFLOW_ALLOW_MODEL_CODE_EXECUTION`) ;
-- lance l'API avec `fastapi run`, sur le port 8000.
+- starts from the `python:3.13-slim` image and copies `uv` into it;
+- installs the project's dependencies (those of `uv.lock`, with the `fastapi` extra) before copying the code, so that Docker reuses their layer when only the code changes;
+- installs the project;
+- runs the server as a user who isn't `root`;
+- starts the API with `fastapi run`, on port 8000.
 
-Écrivez aussi un `.dockerignore` qui garde hors du contexte de construction les données, l'environnement virtuel et les fichiers d'identifiants (`*.env`).
+Also write a `.dockerignore` that keeps the data, the virtual environment and the credential files (`*.env`) out of the build context.
 
-Construisez puis lancez l'image, les identifiants MLflow dans `identifiants.env`, et appelez l'API :
+Build then run the image, with the MLflow credentials in `creds.env`, and call the API:
 
-    docker build -t classifieur-paysages .
-    docker run -p 8000:8000 --env-file identifiants.env -e CLE_API=une-cle-de-test classifieur-paysages
-    curl -H "X-API-Key: une-cle-de-test" -F fichier=@foret1.jpg http://localhost:8000/prediction
+    docker build -t landscape-classifier .
+    docker run -p 8000:8000 --env-file creds.env -e API_KEY=a-test-key landscape-classifier
+    curl -H "X-API-Key: a-test-key" -F file=@forest1.jpg http://localhost:8000/predict
 
-`-p 8000:8000` redirige le port 8000 de l'hôte vers celui du conteneur, `--env-file` passe les identifiants au lancement sans les mettre dans l'image, et `-e CLE_API=...` donne la clé d'API, sans laquelle l'API refuse de démarrer.
+`-p 8000:8000` forwards the host's port 8000 to the container's, `--env-file` passes the credentials at startup without putting them in the image, and `-e API_KEY=...` turns the API key on.
 
-**Documentation utile**
+**Useful documentation**
 
 - https://docs.docker.com/build/concepts/context/#dockerignore-files
 
 <details>
-<summary>Conseils supplémentaires</summary>
+<summary>Additional hints</summary>
 
-`COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /uvx /bin/` copie uv. `uv sync --locked --no-install-project --no-dev --extra fastapi` installe les dépendances seules : `pyproject.toml` et `uv.lock` lui suffisent. `README.md` et `LICENSE`, que `pyproject.toml` cite, se copient avec `src/` : la même commande sans `--no-install-project` installe alors le projet, et une correction du README ne réinstalle pas les dépendances. `useradd --create-home app` crée l'utilisateur, `USER app` le choisit. `ENV MLFLOW_ALLOW_MODEL_CODE_EXECUTION=false` fait refuser à MLflow les modèles dont le chargement exécuterait du code (un modèle sérialisé par `pickle`, une archive pt2 qui en contient) ; celui du TP, au format pt2 de `torch.export`, se charge. Chaque ligne d'un `.dockerignore` est un motif de fichiers à exclure.
+`COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /uvx /bin/` copies uv. `uv sync --locked --no-install-project --no-dev --extra fastapi` installs the dependencies alone: it needs `pyproject.toml`, `uv.lock` and the files `pyproject.toml` names (`README.md`, `LICENSE`). The same command without `--no-install-project`, once `src/` is copied, installs the project. `useradd --create-home app` creates the user, `USER app` picks it. Each line of a `.dockerignore` is a pattern of files to exclude.
 
 ```dockerfile
 FROM python:3.13-slim
@@ -736,12 +703,10 @@ COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /uvx /bin/
 WORKDIR /app
 COPY ...
 RUN uv sync ...
-COPY ...
 COPY src ./src
 RUN uv sync ...
 RUN ...
 USER app
-ENV ...
 CMD [...]
 ```
 
@@ -754,18 +719,16 @@ CMD [...]
 FROM python:3.13-slim
 COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /uvx /bin/
 WORKDIR /app
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock README.md LICENSE ./
 RUN uv sync --locked --no-install-project --no-dev --extra fastapi
-COPY README.md LICENSE ./
 COPY src ./src
 RUN uv sync --locked --no-dev --extra fastapi
 RUN useradd --create-home app
 USER app
-ENV MLFLOW_ALLOW_MODEL_CODE_EXECUTION=false
-CMD ["uv", "run", "--no-sync", "fastapi", "run", "src/classifieur_paysages/api.py"]
+CMD ["uv", "run", "--no-sync", "fastapi", "run", "src/landscape_classifier/api.py"]
 ```
 
-`.dockerignore` :
+`.dockerignore`:
 
 ```text
 .env
@@ -774,12 +737,12 @@ CMD ["uv", "run", "--no-sync", "fastapi", "run", "src/classifieur_paysages/api.p
 .venv
 mlflow.db
 mlruns
-test-images
-entrainement-images
+test-data
+train-data
 ```
 
 </details>
 
-## Crédits des images
+## Image credits
 
-Voir [IMAGES.md](IMAGES.md).
+See [IMAGES.md](IMAGES.md).
