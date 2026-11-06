@@ -21,6 +21,7 @@ version = "0.1.0"
 [project.optional-dependencies]
 fastapi = [
   "fastapi[standard] >= 0.115, < 1",
+  "prometheus-fastapi-instrumentator >= 7, < 8",
 ]
 notebook = [
   "jupyter >= 1, < 2",
