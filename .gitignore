@@ -9,5 +9,5 @@ dist/
 /mlflow.db
 .env
 *.env
-/entrainement-images
-/test-images
+/train-data
+/test-data
