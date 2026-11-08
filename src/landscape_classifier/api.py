@@ -23,6 +23,9 @@ models: dict[str, Any] = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+    if not os.environ.get("API_KEY"):
+        msg = "API_KEY missing: the API refuses to start"
+        raise RuntimeError(msg)
     models["classifier"] = mlflow.pytorch.load_model(MODEL_URI)
     models["classes"] = mlflow.models.get_model_info(MODEL_URI).metadata["classes"]  # pyrefly: ignore[unsupported-operation]
     yield
@@ -40,8 +43,7 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
 def check_api_key(key: Annotated[str | None, Security(api_key_header)]) -> None:
-    expected = os.environ.get("API_KEY")
-    if expected and not secrets.compare_digest(key or "", expected):
+    if not secrets.compare_digest(key or "", os.environ["API_KEY"]):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
 
