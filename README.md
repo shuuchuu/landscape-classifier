@@ -4,7 +4,7 @@
 
 This lab follows a model end to end: a small convolutional network (LeNet, in PyTorch) that classifies landscape pictures into 6 classes (buildings, forest, glacier, mountain, sea, street), whose training is tracked with MLflow, which is published to MLflow's model registry, then served by a FastAPI API packaged in a Docker image. It needs no GPU.
 
-This README is its statement, for a Codespace or your computer; the [lab's notebook](https://colab.research.google.com/github/shuuchuu/labs/blob/main/deployment-mlflow-registry-deployment-hands-on-en.ipynb) gives the same in Colab. The [`solution-en` branch](https://github.com/shuuchuu/landscape-classifier/tree/solution-en) gives a solution. The MLflow server is that of the [m09/landscape-classifier](https://dagshub.com/m09/landscape-classifier) DagsHub repository.
+This README is its statement, for a Codespace or your computer; the [lab's notebook](https://colab.research.google.com/github/shuuchuu/labs/blob/main/deployment-mlflow-registry-deployment-hands-on-en.ipynb) gives the same in Colab. The [`solution-en` branch](https://github.com/shuuchuu/landscape-classifier/tree/solution-en) gives a solution. The MLflow server is that of your own DagsHub repository, which you create in the "Credentials for the MLflow server" section: everyone finds their own runs and models there, without the others'.
 
 ## Setting up the environment
 
@@ -18,11 +18,16 @@ The commands below run from the repository's root.
 
 ### Credentials for the MLflow server
 
-Create a `creds.env` file (which git ignores) with your DagsHub credentials, the password being a secret token, created in your DagsHub account's settings, *Tokens*, not your DagsHub password:
+Each trainee tracks their models in their own MLflow server, that of a DagsHub repository in their name:
 
-    MLFLOW_TRACKING_URI=https://dagshub.com/m09/landscape-classifier.mlflow
-    MLFLOW_TRACKING_USERNAME=your-username
-    MLFLOW_TRACKING_PASSWORD=your-token
+1. On [DagsHub](https://dagshub.com), create a free account, then an empty repository named `landscape-classifier` (*New repository*). Its MLflow server's address is `https://dagshub.com/<your username>/landscape-classifier.mlflow`.
+2. In your DagsHub account's settings, *Tokens*, create a token: MLflow asks for it, not for your password.
+
+Then create a `creds.env` file (which git ignores) with your server's address, your DagsHub username and that token:
+
+    MLFLOW_TRACKING_URI=https://dagshub.com/<your username>/landscape-classifier.mlflow
+    MLFLOW_TRACKING_USERNAME=<your username>
+    MLFLOW_TRACKING_PASSWORD=<your token>
 
 `uv run --env-file creds.env <command>` and `docker run --env-file creds.env` pass them to the programs that talk to MLflow.
 
@@ -204,7 +209,7 @@ The `landscape-classifier` command runs the training, 3 epochs over the 14,000 i
 
     MLFLOW_DEFAULT_PREDICTION_DEVICE=cpu uv run --env-file creds.env landscape-classifier
 
-Then open MLflow's interface, <https://dagshub.com/m09/landscape-classifier.mlflow>: the `landscape-classifier` experiment shows your run, its parameters and the `train_loss` curve, and the *Models* page the new version of `dev.ml.landscape-classifier`.
+Then open MLflow's interface, at your server's address (`https://dagshub.com/<your username>/landscape-classifier.mlflow`): the `landscape-classifier` experiment shows your run, its parameters and the `train_loss` curve, and the *Models* page the new version of `dev.ml.landscape-classifier`.
 
 ## Using the MLflow model registry
 
@@ -565,12 +570,12 @@ Start the server with the credentials of `creds.env`, then call it from another 
 
 ## Protecting the API with a key
 
-Protect `POST /predict` with an API key: when the `API_KEY` environment variable is set, a request without an `X-API-Key` header equal to its value gets a 401 error. Without `API_KEY`, the API stays open, as in the previous section, and `GET /health` always stays open.
+Protect `POST /predict` with an API key, read from the `API_KEY` environment variable: without it, the API refuses to start (in `lifespan`, before loading the model), rather than staying open to everyone; a request without an `X-API-Key` header equal to its value gets a 401 error. `GET /health` stays open.
 
 <details>
 <summary>Additional hints</summary>
 
-`APIKeyHeader(name="X-API-Key", auto_error=False)` reads the header (`None` when it's missing). A `check_api_key` function receiving it through `Security(api_key_header)` raises `HTTPException(status_code=401, detail=...)`, and `@app.post("/predict", dependencies=[Depends(check_api_key)])` calls it before each request. `secrets.compare_digest` compares two strings in a time that doesn't depend on their content. Add to `api.py`:
+`APIKeyHeader(name="X-API-Key", auto_error=False)` reads the header (`None` when it's missing). A `check_api_key` function receiving it through `Security(api_key_header)` raises `HTTPException(status_code=401, detail=...)`, and `@app.post("/predict", dependencies=[Depends(check_api_key)])` calls it before each request. `secrets.compare_digest` compares two strings in a time that doesn't depend on their content. Without `API_KEY`, `lifespan` raises a `RuntimeError`: a variable forgotten at deployment stops the API instead of opening it. Add to `api.py`:
 
 ```python
 import secrets
@@ -579,12 +584,22 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Security
 from fastapi.security import APIKeyHeader
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+    if ...:
+        msg = ...
+        raise RuntimeError(msg)
+    models["classifier"] = mlflow.pytorch.load_model(MODEL_URI)
+    models["classes"] = mlflow.models.get_model_info(MODEL_URI).metadata["classes"]
+    yield
+
+
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
 def check_api_key(key: Annotated[str | None, Security(api_key_header)]) -> None:
-    expected = os.environ.get("API_KEY")
-    if ...:
+    if not secrets.compare_digest(...):
         raise HTTPException(...)
 
 
@@ -621,6 +636,9 @@ models: dict[str, Any] = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+    if not os.environ.get("API_KEY"):
+        msg = "API_KEY missing: the API refuses to start"
+        raise RuntimeError(msg)
     models["classifier"] = mlflow.pytorch.load_model(MODEL_URI)
     models["classes"] = mlflow.models.get_model_info(MODEL_URI).metadata["classes"]
     yield
@@ -631,8 +649,7 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
 def check_api_key(key: Annotated[str | None, Security(api_key_header)]) -> None:
-    expected = os.environ.get("API_KEY")
-    if expected and not secrets.compare_digest(key or "", expected):
+    if not secrets.compare_digest(key or "", os.environ["API_KEY"]):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
 
@@ -662,8 +679,9 @@ def predict(file: UploadFile) -> Prediction:
 
 ### Testing the key
 
-Restart the server with a key, then call it without the key, and with it:
+Restart the server without a key: it refuses to start. Restart it with a key, then call it without the key, and with it:
 
+    uv run --env-file creds.env fastapi dev src/landscape_classifier/api.py
     API_KEY=a-test-key uv run --env-file creds.env fastapi dev src/landscape_classifier/api.py
     curl -F file=@forest1.jpg http://localhost:8000/predict
     curl -H "X-API-Key: a-test-key" -F file=@forest1.jpg http://localhost:8000/predict
@@ -686,7 +704,7 @@ Build then run the image, with the MLflow credentials in `creds.env`, and call t
     docker run -p 8000:8000 --env-file creds.env -e API_KEY=a-test-key landscape-classifier
     curl -H "X-API-Key: a-test-key" -F file=@forest1.jpg http://localhost:8000/predict
 
-`-p 8000:8000` forwards the host's port 8000 to the container's, `--env-file` passes the credentials at startup without putting them in the image, and `-e API_KEY=...` turns the API key on.
+`-p 8000:8000` forwards the host's port 8000 to the container's, `--env-file` passes the credentials at startup without putting them in the image, and `-e API_KEY=...` gives the API key, without which the API refuses to start.
 
 **Useful documentation**
 
