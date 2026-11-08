@@ -4,7 +4,7 @@
 
 Ce TP suit un modèle de bout en bout : un petit réseau convolutif (LeNet, en PyTorch) qui classe des photos de paysages en 6 classes (bâtiments, forêt, glacier, montagne, mer, rue), dont on suit l'entraînement avec MLflow, que l'on publie dans le registre de modèles de MLflow, puis que l'on sert par une API FastAPI empaquetée dans une image Docker. Il n'a pas besoin de GPU.
 
-Ce README en est l'énoncé, pour un Codespace ou votre poste ; le [notebook du TP](https://colab.research.google.com/github/shuuchuu/labs/blob/main/deployment-mlflow-registry-deployment-hands-on-fr.ipynb) donne le même dans Colab. La [branche `solution`](https://github.com/shuuchuu/landscape-classifier/tree/solution) donne une solution. Le serveur MLflow est celui du dépôt DagsHub [m09/landscape-classifier](https://dagshub.com/m09/landscape-classifier).
+Ce README en est l'énoncé, pour un Codespace ou votre poste ; le [notebook du TP](https://colab.research.google.com/github/shuuchuu/labs/blob/main/deployment-mlflow-registry-deployment-hands-on-fr.ipynb) donne le même dans Colab. La [branche `solution`](https://github.com/shuuchuu/landscape-classifier/tree/solution) donne une solution. Le serveur MLflow est celui de votre propre dépôt DagsHub, que vous créez à la section « Identifiants pour le serveur MLflow » : chacun y retrouve ses exécutions et ses modèles, sans ceux des autres.
 
 ## Mise en place de l'environnement
 
@@ -18,11 +18,16 @@ Les commandes qui suivent se lancent à la racine du dépôt.
 
 ### Identifiants pour le serveur MLflow
 
-Créez un fichier `identifiants.env` (que git ignore) avec vos identifiants DagsHub, le mot de passe étant un jeton secret, à créer dans les paramètres de votre compte DagsHub, *Tokens*, et non votre mot de passe DagsHub :
+Chaque stagiaire suit ses modèles dans son propre serveur MLflow, celui d'un dépôt DagsHub à son nom :
 
-    MLFLOW_TRACKING_URI=https://dagshub.com/m09/landscape-classifier.mlflow
-    MLFLOW_TRACKING_USERNAME=votre-nom-d-utilisateur
-    MLFLOW_TRACKING_PASSWORD=votre-jeton
+1. Sur [DagsHub](https://dagshub.com), créez un compte gratuit, puis un dépôt vide nommé `landscape-classifier` (*New repository*). Son serveur MLflow a pour adresse `https://dagshub.com/<votre nom d'utilisateur>/landscape-classifier.mlflow`.
+2. Dans les paramètres de votre compte DagsHub, *Tokens*, créez un jeton : c'est lui, et non votre mot de passe, que demande MLflow.
+
+Créez ensuite un fichier `identifiants.env` (que git ignore) avec l'adresse de votre serveur, votre nom d'utilisateur DagsHub et ce jeton :
+
+    MLFLOW_TRACKING_URI=https://dagshub.com/<votre nom d'utilisateur>/landscape-classifier.mlflow
+    MLFLOW_TRACKING_USERNAME=<votre nom d'utilisateur>
+    MLFLOW_TRACKING_PASSWORD=<votre jeton>
 
 `uv run --env-file identifiants.env <commande>` et `docker run --env-file identifiants.env` les passent aux programmes qui parlent à MLflow.
 
@@ -210,7 +215,7 @@ La commande `classifieur-paysages` lance l'entraînement, 3 époques sur les 14�
 
     MLFLOW_DEFAULT_PREDICTION_DEVICE=cpu uv run --env-file identifiants.env classifieur-paysages
 
-Ouvrez ensuite l'interface de MLflow, <https://dagshub.com/m09/landscape-classifier.mlflow> : l'expérience `classifieur-paysages` montre votre exécution, ses paramètres et la courbe de `perte_entrainement`, et la page *Models* la nouvelle version de `dev.ml.classifieur-paysages`.
+Ouvrez ensuite l'interface de MLflow, à l'adresse de votre serveur (`https://dagshub.com/<votre nom d'utilisateur>/landscape-classifier.mlflow`) : l'expérience `classifieur-paysages` montre votre exécution, ses paramètres et la courbe de `perte_entrainement`, et la page *Models* la nouvelle version de `dev.ml.classifieur-paysages`.
 
 ## Utilisation du registre de modèles MLflow
 
@@ -256,7 +261,7 @@ print(client.tracking_uri)
 
 ### Recherche de modèles
 
-Affichez tous les modèles du registre et, pour chacun, le numéro de sa version la plus récente. Écrivez pour cela une fonction `derniere_version(name)`, que les questions suivantes réutilisent.
+Affichez tous les modèles du registre et, pour chacun, le numéro de sa version la plus récente. Écrivez pour cela une fonction `derniere_version(nom)`, que les questions suivantes réutilisent.
 
 **Documentation utile**
 
@@ -359,7 +364,7 @@ modele_pyfunc = mlflow.pyfunc.load_model(uri, model_config={"device": "cpu"})
 print(modele_pyfunc.predict(lot.numpy()))
 ```
 
-Le modèle a deux flavors. `pytorch` donne le réseau PyTorch (`mlflow.pytorch.load_model`), qui prend et renvoie des tenseurs. `python_function` est l'interface commune à tous les modèles MLflow (`mlflow.pyfunc.load_model`), dont `predict` prend et renvoie des tableaux NumPy : c'est elle que `mlflow modeles serve` sert, sans que l'appelant ait besoin de PyTorch. Aucune des deux ne transforme l'image : le prétraitement de `cree_transformation` reste à faire, à l'identique de l'entraînement. Sur un GPU, `pyfunc` y chargerait le modèle, ce que refuse un modèle au format pt2 de MLflow 3 (`torch.export`) : il garde le device où il a été enregistré, ici le CPU, d'où `model_config={"device": "cpu"}`.
+Le modèle a deux flavors. `pytorch` donne le réseau PyTorch (`mlflow.pytorch.load_model`), qui prend et renvoie des tenseurs. `python_function` est l'interface commune à tous les modèles MLflow (`mlflow.pyfunc.load_model`), dont `predict` prend et renvoie des tableaux NumPy : c'est elle que `mlflow models serve` sert, sans que l'appelant ait besoin de PyTorch. Aucune des deux ne transforme l'image : le prétraitement de `cree_transformation` reste à faire, à l'identique de l'entraînement. Sur un GPU, `pyfunc` y chargerait le modèle, ce que refuse un modèle au format pt2 de MLflow 3 (`torch.export`) : il garde le device où il a été enregistré, ici le CPU, d'où `model_config={"device": "cpu"}`.
 
 </details>
 
@@ -408,7 +413,7 @@ with torch.inference_mode():
 
 ### Promotion d'un modèle
 
-Pour promouvoir un modèle d'un environnement au suivant, la méthode recommandée est de copier la version voulue vers le modèle de l'environnement suivant, qui a son propre nom. Copiez la version `champion` de votre modèle vers le modèle `staging.ml.classifieur-paysages`, le nom où le préfixe `dev.` devient `preprod.`.
+Pour promouvoir un modèle d'un environnement au suivant, la méthode recommandée est de copier la version voulue vers le modèle de l'environnement suivant, qui a son propre nom. Copiez la version `champion` de votre modèle vers le modèle `staging.ml.classifieur-paysages`, le nom où le préfixe `dev.` devient `staging.`.
 
 <details>
 <summary>Conseils supplémentaires</summary>
@@ -575,12 +580,12 @@ Lancez le serveur avec les identifiants de `identifiants.env`, puis appelez-le d
 
 ## Protection de l'API par une clé
 
-Protégez `POST /prediction` par une clé d'API : quand la variable d'environnement `CLE_API` est définie, une requête qui n'a pas d'en-tête `X-API-Key` égal à sa valeur reçoit une erreur 401. Sans `CLE_API`, l'API reste ouverte, comme dans la section précédente, et `GET /sante` reste toujours ouvert.
+Protégez `POST /prediction` par une clé d'API, lue dans la variable d'environnement `CLE_API` : sans elle, l'API refuse de démarrer (dans `lifespan`, avant de charger le modèle), plutôt que de rester ouverte à tous ; une requête qui n'a pas d'en-tête `X-API-Key` égal à sa valeur reçoit une erreur 401. `GET /sante` reste ouvert.
 
 <details>
 <summary>Conseils supplémentaires</summary>
 
-`APIKeyHeader(name="X-API-Key", auto_error=False)` lit l'en-tête (`None` s'il manque). Une fonction `verifie_cle_api` qui le reçoit par `Security(entete_cle_api)` lève `HTTPException(status_code=401, detail=...)`, et `@app.post("/prediction", dependencies=[Depends(verifie_cle_api)])` l'appelle avant chaque requête. `secrets.compare_digest` compare deux chaînes en un temps qui ne dépend pas de leur contenu. Ajoutez à `api.py` :
+`APIKeyHeader(name="X-API-Key", auto_error=False)` lit l'en-tête (`None` s'il manque). Une fonction `verifie_cle_api` qui le reçoit par `Security(entete_cle_api)` lève `HTTPException(status_code=401, detail=...)`, et `@app.post("/prediction", dependencies=[Depends(verifie_cle_api)])` l'appelle avant chaque requête. `secrets.compare_digest` compare deux chaînes en un temps qui ne dépend pas de leur contenu. Sans `CLE_API`, `lifespan` lève une `RuntimeError` : une variable oubliée au déploiement arrête l'API au lieu de l'ouvrir. Ajoutez à `api.py` :
 
 ```python
 import secrets
@@ -589,12 +594,22 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Security
 from fastapi.security import APIKeyHeader
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+    if ...:
+        msg = ...
+        raise RuntimeError(msg)
+    modeles["classifieur"] = mlflow.pytorch.load_model(URI_MODELE)
+    modeles["classes"] = mlflow.models.get_model_info(URI_MODELE).metadata["classes"]
+    yield
+
+
 entete_cle_api = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
 def verifie_cle_api(cle: Annotated[str | None, Security(entete_cle_api)]) -> None:
-    attendue = os.environ.get("CLE_API")
-    if ...:
+    if not secrets.compare_digest(...):
         raise HTTPException(...)
 
 
@@ -633,6 +648,9 @@ modeles: dict[str, Any] = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+    if not os.environ.get("CLE_API"):
+        msg = "CLE_API absente : l'API refuse de démarrer"
+        raise RuntimeError(msg)
     modeles["classifieur"] = mlflow.pytorch.load_model(URI_MODELE)
     modeles["classes"] = mlflow.models.get_model_info(URI_MODELE).metadata["classes"]
     yield
@@ -643,8 +661,7 @@ entete_cle_api = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
 def verifie_cle_api(cle: Annotated[str | None, Security(entete_cle_api)]) -> None:
-    attendue = os.environ.get("CLE_API")
-    if attendue and not secrets.compare_digest(cle or "", attendue):
+    if not secrets.compare_digest(cle or "", os.environ["CLE_API"]):
         raise HTTPException(status_code=401, detail="Clé d'API invalide")
 
 
@@ -674,8 +691,9 @@ def predit(fichier: UploadFile) -> Prediction:
 
 ### Test de la clé
 
-Relancez le serveur avec une clé, puis appelez-le sans clé, et avec :
+Relancez le serveur sans clé : il refuse de démarrer. Relancez-le avec une clé, puis appelez-le sans clé, et avec :
 
+    uv run --env-file identifiants.env fastapi dev src/classifieur_paysages/api.py
     CLE_API=une-cle-de-test uv run --env-file identifiants.env fastapi dev src/classifieur_paysages/api.py
     curl -F fichier=@foret1.jpg http://localhost:8000/prediction
     curl -H "X-API-Key: une-cle-de-test" -F fichier=@foret1.jpg http://localhost:8000/prediction
@@ -698,7 +716,7 @@ Construisez puis lancez l'image, les identifiants MLflow dans `identifiants.env`
     docker run -p 8000:8000 --env-file identifiants.env -e CLE_API=une-cle-de-test classifieur-paysages
     curl -H "X-API-Key: une-cle-de-test" -F fichier=@foret1.jpg http://localhost:8000/prediction
 
-`-p 8000:8000` redirige le port 8000 de l'hôte vers celui du conteneur, `--env-file` passe les identifiants au lancement sans les mettre dans l'image, et `-e CLE_API=...` active la clé d'API.
+`-p 8000:8000` redirige le port 8000 de l'hôte vers celui du conteneur, `--env-file` passe les identifiants au lancement sans les mettre dans l'image, et `-e CLE_API=...` donne la clé d'API, sans laquelle l'API refuse de démarrer.
 
 **Documentation utile**
 
