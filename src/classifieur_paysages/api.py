@@ -25,6 +25,9 @@ modeles: dict[str, Any] = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+    if not os.environ.get("CLE_API"):
+        msg = "CLE_API absente : l'API refuse de démarrer"
+        raise RuntimeError(msg)
     modeles["classifieur"] = mlflow.pytorch.load_model(URI_MODELE)
     modeles["classes"] = mlflow.models.get_model_info(URI_MODELE).metadata["classes"]  # pyrefly: ignore[unsupported-operation]
     yield
@@ -42,8 +45,7 @@ entete_cle_api = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
 def verifie_cle_api(cle: Annotated[str | None, Security(entete_cle_api)]) -> None:
-    attendue = os.environ.get("CLE_API")
-    if attendue and not secrets.compare_digest(cle or "", attendue):
+    if not secrets.compare_digest(cle or "", os.environ["CLE_API"]):
         raise HTTPException(status_code=401, detail="Clé d'API invalide")
 
 

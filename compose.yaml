@@ -4,6 +4,7 @@ services:
     ports: ["8000:8000"]
     environment:
       MLFLOW_TRACKING_URI: http://mlflow:5000
+      CLE_API: ${CLE_API}  # sans elle, l'API refuse de démarrer
     depends_on:
       mlflow:
         condition: service_healthy
