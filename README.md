@@ -57,14 +57,16 @@ Modifiez la fonction `entraine` de `src/classifieur_paysages/entrainement.py` po
 - la perte moyenne de chaque époque, `perte_entrainement`, avec le numéro de l'époque comme pas (`step`) ;
 - l'exactitude sur les images de test, `exactitude_test`.
 
-En fin d'exécution, publiez le modèle dans le registre de modèles sous le nom `dev.ml.classifieur-paysages`, avec les noms des classes dans ses métadonnées (`classes`), que l'API relira, et la version de PyTorch installée comme dépendance.
+En fin d'exécution, publiez le modèle dans le registre de modèles sous le nom `dev.ml.classifieur-paysages`, avec les noms des classes dans ses métadonnées (`classes`), que l'API relira, et la version de PyTorch installée comme dépendance. Une fois le modèle entraîné (section suivante), son exécution permettra-t-elle de retrouver le code et les données qui l'ont produit ?
 
 Modifiez le fichier dans votre éditeur. La section suivante lance l'entraînement.
 
 <details>
 <summary>Conseils supplémentaires</summary>
 
-`mlflow.set_experiment("classifieur-paysages")` choisit l'expérience (et la crée au besoin), puis tout se passe dans un bloc `with mlflow.start_run():`. `mlflow.log_params` prend un dictionnaire, `mlflow.log_metric(nom, valeur, step=epoque)` une valeur. `mlflow.pytorch.log_model(modele, name="modele", registered_model_name=..., input_example=..., metadata=..., pip_requirements=...)` enregistre le modèle comme artefact de l'exécution et en crée une nouvelle version dans le registre. MLflow exporte le graphe du modèle en l'exécutant sur `input_example`, un tableau NumPy de la forme d'un lot d'une image : `torch.zeros(1, 3, *TAILLE_IMAGE).numpy()`. Les noms des classes sont `chargeur_ent.dataset.classes`. `pip_requirements` prend une liste de dépendances au format de pip : `torch.__version__` donne la version de PyTorch, dont on retire le suffixe local (`+cu128` sur Colab), que PyPI ne connaît pas. Ajoutez `import mlflow` en tête du fichier ; le reste ne change pas.
+`mlflow.set_experiment("classifieur-paysages")` choisit l'expérience (et la crée au besoin), puis tout se passe dans un bloc `with mlflow.start_run():`. `mlflow.log_params` prend un dictionnaire, `mlflow.log_metric(nom, valeur, step=epoque)` une valeur. `mlflow.pytorch.log_model(modele, name="modele", registered_model_name=..., input_example=..., metadata=..., pip_requirements=...)` journalise le modèle (un modèle `m-…`, relié à l'exécution) et en crée une nouvelle version dans le registre. MLflow exporte le graphe du modèle en l'exécutant sur `input_example`, un tableau NumPy de la forme d'un lot d'une image : `torch.zeros(1, 3, *TAILLE_IMAGE).numpy()`. Les noms des classes sont `chargeur_ent.dataset.classes`. `pip_requirements` donne au modèle une liste courte de dépendances, indépendante du projet, au format de pip : `torch.__version__` donne la version de PyTorch, dont on retire le suffixe local (`+cu128` sur Colab), que PyPI ne connaît pas. Ajoutez `import mlflow` en tête du fichier ; le reste ne change pas.
+
+Quant à la question : non. L'exécution ne note pas le *commit* du code : MLflow ne pose l'étiquette `mlflow.source.git.commit` que pour un script lancé depuis un dépôt git, pas pour la commande `classifieur-paysages`, installée hors du dépôt, et le code que modifient les exercices n'est commité nulle part. Elle ne note pas non plus la version des données. Pour les retrouver, commitez avant d'entraîner et posez deux étiquettes dans `entraine` : `mlflow.set_tag` du *commit*, la sortie de `git rev-parse HEAD`, et de l'empreinte des dossiers d'images, que `dvc repro` note dans `dvc.lock`.
 
 ```python
 def entraine(
@@ -202,7 +204,7 @@ def entraine(
             registered_model_name=NOM_MODELE,
             input_example=torch.zeros(1, 3, *TAILLE_IMAGE).numpy(),
             metadata={"classes": chargeur_ent.dataset.classes},  # pyrefly: ignore[missing-attribute]
-            # La version de PyTorch sans son suffixe local (+cu128), inconnu de PyPI
+            # Une liste courte, indépendante du projet ; PyTorch sans son suffixe local
             pip_requirements=["torch==" + torch.__version__.split("+")[0]],
         )
 ```
@@ -270,7 +272,7 @@ Affichez tous les modèles du registre et, pour chacun, le numéro de sa version
 <details>
 <summary>Conseils supplémentaires</summary>
 
-`client.search_registered_models()` renvoie les modèles enregistrés (attribut `name`), `client.search_model_versions(f"name = '{nom}'")` les versions d'un modèle, dont l'attribut `version` est une chaîne : comparez les versions comme des entiers.
+`client.search_registered_models()` renvoie les modèles enregistrés (attribut `name`), `client.search_model_versions(f"name = '{nom}'")` les versions d'un modèle, dont l'attribut `version` est une chaîne par un serveur, un entier en local : comparez les versions comme des entiers.
 
 ```python
 def derniere_version(nom: str) -> str:
@@ -585,7 +587,7 @@ Protégez `POST /prediction` par une clé d'API, lue dans la variable d'environn
 <details>
 <summary>Conseils supplémentaires</summary>
 
-`APIKeyHeader(name="X-API-Key", auto_error=False)` lit l'en-tête (`None` s'il manque). Une fonction `verifie_cle_api` qui le reçoit par `Security(entete_cle_api)` lève `HTTPException(status_code=401, detail=...)`, et `@app.post("/prediction", dependencies=[Depends(verifie_cle_api)])` l'appelle avant chaque requête. `secrets.compare_digest` compare deux chaînes en un temps qui ne dépend pas de leur contenu. Sans `CLE_API`, `lifespan` lève une `RuntimeError` : une variable oubliée au déploiement arrête l'API au lieu de l'ouvrir. Ajoutez à `api.py` :
+`APIKeyHeader(name="X-API-Key", auto_error=False)` lit l'en-tête (`None` s'il manque). Une fonction `verifie_cle_api` qui le reçoit par `Security(entete_cle_api)` lève `HTTPException(status_code=401, detail=...)`, et `@app.post("/prediction", dependencies=[Depends(verifie_cle_api)])` l'appelle avant chaque requête. `secrets.compare_digest` compare deux suites d'octets en un temps qui ne dépend pas de leur contenu : `.encode()` des deux côtés, car sur des chaînes il n'accepte que l'ASCII, et une clé accentuée lèverait une `TypeError`, une erreur 500 au lieu d'un 401. Sans `CLE_API`, `lifespan` lève une `RuntimeError` : une variable oubliée au déploiement arrête l'API au lieu de l'ouvrir. Ajoutez à `api.py` :
 
 ```python
 import secrets
@@ -661,7 +663,7 @@ entete_cle_api = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
 def verifie_cle_api(cle: Annotated[str | None, Security(entete_cle_api)]) -> None:
-    if not secrets.compare_digest(cle or "", os.environ["CLE_API"]):
+    if not secrets.compare_digest((cle or "").encode(), os.environ["CLE_API"].encode()):
         raise HTTPException(status_code=401, detail="Clé d'API invalide")
 
 
@@ -703,9 +705,10 @@ Relancez le serveur sans clé : il refuse de démarrer. Relancez-le avec une cl
 Écrivez un `Dockerfile` pour l'API, qui :
 
 - part de l'image `python:3.13-slim` et y copie `uv` ;
-- installe les dépendances du projet (celles de `uv.lock`, avec l'extra `fastapi`) avant d'y copier le code, pour que Docker réutilise leur couche quand seul le code change ;
+- installe les dépendances du projet (celles de `uv.lock`, avec l'extra `fastapi`) avant d'y copier le code et le README, pour que Docker réutilise leur couche quand seul le code ou le README change ;
 - installe le projet ;
 - fait tourner le serveur sous un utilisateur qui n'est pas `root` ;
+- interdit à MLflow de charger un modèle qui exécuterait du code (`MLFLOW_ALLOW_MODEL_CODE_EXECUTION`) ;
 - lance l'API avec `fastapi run`, sur le port 8000.
 
 Écrivez aussi un `.dockerignore` qui garde hors du contexte de construction les données, l'environnement virtuel et les fichiers d'identifiants (`*.env`).
@@ -725,7 +728,7 @@ Construisez puis lancez l'image, les identifiants MLflow dans `identifiants.env`
 <details>
 <summary>Conseils supplémentaires</summary>
 
-`COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /uvx /bin/` copie uv. `uv sync --locked --no-install-project --no-dev --extra fastapi` installe les dépendances seules : il lui faut `pyproject.toml`, `uv.lock` et les fichiers que `pyproject.toml` cite (`README.md`, `LICENSE`). La même commande sans `--no-install-project`, une fois `src/` copié, installe le projet. `useradd --create-home app` crée l'utilisateur, `USER app` le choisit. Chaque ligne d'un `.dockerignore` est un motif de fichiers à exclure.
+`COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /uvx /bin/` copie uv. `uv sync --locked --no-install-project --no-dev --extra fastapi` installe les dépendances seules : `pyproject.toml` et `uv.lock` lui suffisent. `README.md` et `LICENSE`, que `pyproject.toml` cite, se copient avec `src/` : la même commande sans `--no-install-project` installe alors le projet, et une correction du README ne réinstalle pas les dépendances. `useradd --create-home app` crée l'utilisateur, `USER app` le choisit. `ENV MLFLOW_ALLOW_MODEL_CODE_EXECUTION=false` fait refuser à MLflow les modèles dont le chargement exécuterait du code (un modèle sérialisé par `pickle`, une archive pt2 qui en contient) ; celui du TP, au format pt2 de `torch.export`, se charge. Chaque ligne d'un `.dockerignore` est un motif de fichiers à exclure.
 
 ```dockerfile
 FROM python:3.13-slim
@@ -733,10 +736,12 @@ COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /uvx /bin/
 WORKDIR /app
 COPY ...
 RUN uv sync ...
+COPY ...
 COPY src ./src
 RUN uv sync ...
 RUN ...
 USER app
+ENV ...
 CMD [...]
 ```
 
@@ -749,12 +754,14 @@ CMD [...]
 FROM python:3.13-slim
 COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /uvx /bin/
 WORKDIR /app
-COPY pyproject.toml uv.lock README.md LICENSE ./
+COPY pyproject.toml uv.lock ./
 RUN uv sync --locked --no-install-project --no-dev --extra fastapi
+COPY README.md LICENSE ./
 COPY src ./src
 RUN uv sync --locked --no-dev --extra fastapi
 RUN useradd --create-home app
 USER app
+ENV MLFLOW_ALLOW_MODEL_CODE_EXECUTION=false
 CMD ["uv", "run", "--no-sync", "fastapi", "run", "src/classifieur_paysages/api.py"]
 ```
 
