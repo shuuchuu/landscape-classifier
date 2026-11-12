@@ -45,7 +45,7 @@ entete_cle_api = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
 def verifie_cle_api(cle: Annotated[str | None, Security(entete_cle_api)]) -> None:
-    if not secrets.compare_digest(cle or "", os.environ["CLE_API"]):
+    if not secrets.compare_digest((cle or "").encode(), os.environ["CLE_API"].encode()):
         raise HTTPException(status_code=401, detail="Clé d'API invalide")
 
 
