@@ -43,7 +43,7 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
 def check_api_key(key: Annotated[str | None, Security(api_key_header)]) -> None:
-    if not secrets.compare_digest(key or "", os.environ["API_KEY"]):
+    if not secrets.compare_digest((key or "").encode(), os.environ["API_KEY"].encode()):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
 
