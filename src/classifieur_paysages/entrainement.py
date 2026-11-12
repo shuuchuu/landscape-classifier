@@ -100,6 +100,6 @@ def entraine(
             registered_model_name=NOM_MODELE,
             input_example=torch.zeros(1, 3, *TAILLE_IMAGE).numpy(),
             metadata={"classes": chargeur_ent.dataset.classes},  # pyrefly: ignore[missing-attribute]
-            # La version de PyTorch sans son suffixe local (+cu128), inconnu de PyPI
+            # Une liste courte, indépendante du projet ; PyTorch sans son suffixe local
             pip_requirements=["torch==" + torch.__version__.split("+")[0]],
         )

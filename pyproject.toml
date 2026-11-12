@@ -36,6 +36,7 @@ Homepage = "https://github.com/shuuchuu/landscape-classifier"
 dev = [
   "doit >= 0.37",
   "pyrefly >= 1.4",
+  "pytest >= 9",
   "ruff >= 0.17",
 ]
 
