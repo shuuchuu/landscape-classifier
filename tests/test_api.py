@@ -1,26 +1,26 @@
-"""La clé d'API de l'API, testée sans modèle ni serveur MLflow."""
+"""The API's key, tested without a model nor an MLflow server."""
 
 import pytest
 from fastapi.testclient import TestClient
 
-from classifieur_paysages.api import app
+from landscape_classifier.api import app
 
 
 @pytest.fixture
-def client_test(monkeypatch: pytest.MonkeyPatch) -> TestClient:
-    monkeypatch.setenv("CLE_API", "une-cle-de-test")
-    # Sans bloc `with`, TestClient n'exécute pas `lifespan` : aucun modèle à charger
+def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    monkeypatch.setenv("API_KEY", "a-test-key")
+    # Without a `with` block, TestClient doesn't run `lifespan`: no model to load
     return TestClient(app)
 
 
 @pytest.mark.parametrize(
-    "entetes",
+    "headers",
     [
         {},
-        {"X-API-Key": "une-autre-cle"},
-        {"X-API-Key": "une-clé-accentuée".encode()},
+        {"X-API-Key": "another-key"},
+        {"X-API-Key": "a-kéy-with-àccents".encode()},
     ],
 )
-def test_cle_refusee(client_test: TestClient, entetes: dict) -> None:
-    reponse = client_test.post("/prediction", headers=entetes)
-    assert reponse.status_code == 401
+def test_key_refused(client: TestClient, headers: dict) -> None:
+    response = client.post("/predict", headers=headers)
+    assert response.status_code == 401

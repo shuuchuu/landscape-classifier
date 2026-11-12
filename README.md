@@ -57,14 +57,16 @@ Change the `train` function of `src/landscape_classifier/train.py` so that a tra
 - the mean loss of each epoch, `train_loss`, with the epoch's number as its `step`;
 - the accuracy on the test images, `test_accuracy`.
 
-At the end of the run, publish the model to the model registry under the name `dev.ml.landscape-classifier`, with the class names in its metadata (`classes`), which the API will read back, and the installed PyTorch version as its dependency.
+At the end of the run, publish the model to the model registry under the name `dev.ml.landscape-classifier`, with the class names in its metadata (`classes`), which the API will read back, and the installed PyTorch version as its dependency. Once the model is trained (next section), will its run let you find the code and the data that produced it?
 
 Edit the file in your editor. The next section runs the training.
 
 <details>
 <summary>Additional hints</summary>
 
-`mlflow.set_experiment("landscape-classifier")` picks the experiment (and creates it if needed), then everything happens in a `with mlflow.start_run():` block. `mlflow.log_params` takes a dictionary, `mlflow.log_metric(name, value, step=epoch)` one value. `mlflow.pytorch.log_model(model, name="model", registered_model_name=..., input_example=..., metadata=..., pip_requirements=...)` logs the model as an artifact of the run and creates a new version of it in the registry. MLflow exports the model's graph by running it on `input_example`, a NumPy array shaped like a batch of one image: `torch.zeros(1, 3, *IMAGE_SIZE).numpy()`. The class names are `train_loader.dataset.classes`. `pip_requirements` takes a list of dependencies in pip's format: `torch.__version__` gives PyTorch's version: remove its local label (`+cu128` on Colab), which PyPI doesn't know. Add `import mlflow` at the top of the file; the rest doesn't change.
+`mlflow.set_experiment("landscape-classifier")` picks the experiment (and creates it if needed), then everything happens in a `with mlflow.start_run():` block. `mlflow.log_params` takes a dictionary, `mlflow.log_metric(name, value, step=epoch)` one value. `mlflow.pytorch.log_model(model, name="model", registered_model_name=..., input_example=..., metadata=..., pip_requirements=...)` logs the model (an `m-…` model, linked to the run) and creates a new version of it in the registry. MLflow exports the model's graph by running it on `input_example`, a NumPy array shaped like a batch of one image: `torch.zeros(1, 3, *IMAGE_SIZE).numpy()`. The class names are `train_loader.dataset.classes`. `pip_requirements` gives the model a short list of dependencies, independent of the project, in pip's format: `torch.__version__` gives PyTorch's version: remove its local label (`+cu128` on Colab), which PyPI doesn't know. Add `import mlflow` at the top of the file; the rest doesn't change.
+
+As for the question: no. The run doesn't record the code's *commit*: MLflow sets the `mlflow.source.git.commit` tag only for a script run from a git repository, not for the `landscape-classifier` command, installed outside the repository, and the code the exercises change is committed nowhere. Nor does it record the data's version. To find them, commit before training and set two tags in `train`: `mlflow.set_tag` of the *commit*, the output of `git rev-parse HEAD`, and of the image folders' hash, which `dvc repro` records in `dvc.lock`.
 
 ```python
 def train(train_dir: str, test_dir: str, learning_rate: float, epochs: int) -> None:
@@ -196,7 +198,7 @@ def train(train_dir: str, test_dir: str, learning_rate: float, epochs: int) -> N
             registered_model_name=MODEL_NAME,
             input_example=torch.zeros(1, 3, *IMAGE_SIZE).numpy(),
             metadata={"classes": train_loader.dataset.classes},  # pyrefly: ignore[missing-attribute]
-            # PyTorch's version without its local label (+cu128 on Colab), not on PyPI
+            # A short list, independent of the project; PyTorch without its local label
             pip_requirements=["torch==" + torch.__version__.split("+")[0]],
         )
 ```
@@ -264,7 +266,7 @@ Print every model of the registry and, for each one, the number of its most rece
 <details>
 <summary>Additional hints</summary>
 
-`client.search_registered_models()` returns the registered models (`name` attribute), `client.search_model_versions(f"name = '{name}'")` a model's versions, whose `version` attribute is a string: compare the versions as integers.
+`client.search_registered_models()` returns the registered models (`name` attribute), `client.search_model_versions(f"name = '{name}'")` a model's versions, whose `version` attribute is a string through a server, an integer locally: compare the versions as integers.
 
 ```python
 def latest_version(name: str) -> str:
@@ -575,7 +577,7 @@ Protect `POST /predict` with an API key, read from the `API_KEY` environment var
 <details>
 <summary>Additional hints</summary>
 
-`APIKeyHeader(name="X-API-Key", auto_error=False)` reads the header (`None` when it's missing). A `check_api_key` function receiving it through `Security(api_key_header)` raises `HTTPException(status_code=401, detail=...)`, and `@app.post("/predict", dependencies=[Depends(check_api_key)])` calls it before each request. `secrets.compare_digest` compares two strings in a time that doesn't depend on their content. Without `API_KEY`, `lifespan` raises a `RuntimeError`: a variable forgotten at deployment stops the API instead of opening it. Add to `api.py`:
+`APIKeyHeader(name="X-API-Key", auto_error=False)` reads the header (`None` when it's missing). A `check_api_key` function receiving it through `Security(api_key_header)` raises `HTTPException(status_code=401, detail=...)`, and `@app.post("/predict", dependencies=[Depends(check_api_key)])` calls it before each request. `secrets.compare_digest` compares two byte strings in a time that doesn't depend on their content: `.encode()` on both sides, since on strings it only accepts ASCII, and a key with an accent would raise a `TypeError`, an error 500 instead of a 401. Without `API_KEY`, `lifespan` raises a `RuntimeError`: a variable forgotten at deployment stops the API instead of opening it. Add to `api.py`:
 
 ```python
 import secrets
@@ -649,7 +651,7 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
 def check_api_key(key: Annotated[str | None, Security(api_key_header)]) -> None:
-    if not secrets.compare_digest(key or "", os.environ["API_KEY"]):
+    if not secrets.compare_digest((key or "").encode(), os.environ["API_KEY"].encode()):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
 
@@ -691,9 +693,10 @@ Restart the server without a key: it refuses to start. Restart it with a key, th
 Write a `Dockerfile` for the API, which:
 
 - starts from the `python:3.13-slim` image and copies `uv` into it;
-- installs the project's dependencies (those of `uv.lock`, with the `fastapi` extra) before copying the code, so that Docker reuses their layer when only the code changes;
+- installs the project's dependencies (those of `uv.lock`, with the `fastapi` extra) before copying the code and the README, so that Docker reuses their layer when only the code or the README changes;
 - installs the project;
 - runs the server as a user who isn't `root`;
+- forbids MLflow to load a model that would run code (`MLFLOW_ALLOW_MODEL_CODE_EXECUTION`);
 - starts the API with `fastapi run`, on port 8000.
 
 Also write a `.dockerignore` that keeps the data, the virtual environment and the credential files (`*.env`) out of the build context.
@@ -713,7 +716,7 @@ Build then run the image, with the MLflow credentials in `creds.env`, and call t
 <details>
 <summary>Additional hints</summary>
 
-`COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /uvx /bin/` copies uv. `uv sync --locked --no-install-project --no-dev --extra fastapi` installs the dependencies alone: it needs `pyproject.toml`, `uv.lock` and the files `pyproject.toml` names (`README.md`, `LICENSE`). The same command without `--no-install-project`, once `src/` is copied, installs the project. `useradd --create-home app` creates the user, `USER app` picks it. Each line of a `.dockerignore` is a pattern of files to exclude.
+`COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /uvx /bin/` copies uv. `uv sync --locked --no-install-project --no-dev --extra fastapi` installs the dependencies alone: `pyproject.toml` and `uv.lock` are enough. `README.md` and `LICENSE`, which `pyproject.toml` names, are copied with `src/`: the same command without `--no-install-project` then installs the project, and a fix to the README doesn't reinstall the dependencies. `useradd --create-home app` creates the user, `USER app` picks it. `ENV MLFLOW_ALLOW_MODEL_CODE_EXECUTION=false` makes MLflow refuse the models whose loading would run code (a model serialized by `pickle`, a pt2 archive holding some); the lab's one, in `torch.export`'s pt2 format, loads. Each line of a `.dockerignore` is a pattern of files to exclude.
 
 ```dockerfile
 FROM python:3.13-slim
@@ -721,10 +724,12 @@ COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /uvx /bin/
 WORKDIR /app
 COPY ...
 RUN uv sync ...
+COPY ...
 COPY src ./src
 RUN uv sync ...
 RUN ...
 USER app
+ENV ...
 CMD [...]
 ```
 
@@ -737,12 +742,14 @@ CMD [...]
 FROM python:3.13-slim
 COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /uvx /bin/
 WORKDIR /app
-COPY pyproject.toml uv.lock README.md LICENSE ./
+COPY pyproject.toml uv.lock ./
 RUN uv sync --locked --no-install-project --no-dev --extra fastapi
+COPY README.md LICENSE ./
 COPY src ./src
 RUN uv sync --locked --no-dev --extra fastapi
 RUN useradd --create-home app
 USER app
+ENV MLFLOW_ALLOW_MODEL_CODE_EXECUTION=false
 CMD ["uv", "run", "--no-sync", "fastapi", "run", "src/landscape_classifier/api.py"]
 ```
 
