@@ -7,8 +7,10 @@
   },
   // Features to add to the dev container. More info: https://containers.dev/features.
   // Docker, to build and run the lab's image in the Codespace.
+  // "moby": false installs Docker CE: Debian trixie, the base image's, has no moby-cli
+  // package, and the feature fails to install with the default (true).
   "features": {
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+    "ghcr.io/devcontainers/features/docker-in-docker:2": { "moby": false }
   },
   // Use 'forwardPorts' to make a list of ports inside the container available locally.
   // "forwardPorts": [],
